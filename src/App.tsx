@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnalyticsGrid } from './components/AnalyticsGrid';
 import { BankrollSettings } from './components/BankrollSettings';
 import { BankrollChart } from './components/BankrollChart';
@@ -8,6 +8,8 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { JournalControls } from './components/JournalControls';
 import { StatsCards } from './components/StatsCards';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { fetchBetsFromSupabase, syncBetsToSupabase } from './lib/betsRepository';
+import { isSupabaseConfigured } from './lib/supabase';
 import type { BetDraft, BetEntry, JournalFilters, ThemeMode } from './types/bet';
 import { buildBettingAnalytics } from './utils/analytics';
 import { getBetStatsSummary, recalculateBankroll } from './utils/betting';
@@ -35,12 +37,22 @@ export default function App() {
     DEFAULT_INITIAL_BANK,
     { sanitize: normalizeInitialBank },
   );
-  const [bets, setBets] = useLocalStorage<BetEntry[]>(STORAGE_KEYS.bets, getDemoBets, {
-    sanitize: normalizeStoredBets,
-  });
+  const [localBackupBets, setLocalBackupBets] = useLocalStorage<BetEntry[]>(
+    STORAGE_KEYS.bets,
+    getDemoBets,
+    {
+      sanitize: normalizeStoredBets,
+    },
+  );
+  const [bets, setBets] = useState<BetEntry[]>(localBackupBets);
   const [theme, setTheme] = useLocalStorage<ThemeMode>(STORAGE_KEYS.theme, 'light', {
     sanitize: (value) => (value === 'dark' ? 'dark' : 'light'),
   });
+  const [isLoadingRemoteBets, setIsLoadingRemoteBets] = useState(isSupabaseConfigured);
+  const [isSyncingRemoteBets, setIsSyncingRemoteBets] = useState(false);
+  const [betsDataSource, setBetsDataSource] = useState<'supabase' | 'local_backup'>(
+    isSupabaseConfigured ? 'supabase' : 'local_backup',
+  );
   const [editingBetId, setEditingBetId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [filters, setFilters] = useState<JournalFilters>({
@@ -51,6 +63,7 @@ export default function App() {
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(
     null,
   );
+  const hasHydratedSupabaseRef = useRef(false);
 
   const recalculatedBets = recalculateBankroll(initialBank, bets);
   const stats = getBetStatsSummary(recalculatedBets, initialBank);
@@ -83,10 +96,134 @@ export default function App() {
       return true;
     });
   }, [filters, recalculatedBets]);
+  const betsDataSourceLabel =
+    betsDataSource === 'supabase' ? 'Supabase' : 'Резервный localStorage';
+  const betsSyncStatus = isLoadingRemoteBets
+    ? 'Загружаем журнал из общей базы.'
+    : isSyncingRemoteBets
+      ? 'Изменения ставок синхронизируются с Supabase.'
+      : betsDataSource === 'supabase'
+        ? 'Ставки читаются и записываются в общую базу.'
+        : 'При недоступности Supabase журнал продолжает работать локально.';
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function hydrateBets() {
+      if (!isSupabaseConfigured) {
+        setBetsDataSource('local_backup');
+        setIsLoadingRemoteBets(false);
+        setNotice({
+          tone: 'info',
+          text: 'Supabase env не найдены. Журнал работает из резервного localStorage.',
+        });
+        return;
+      }
+
+      try {
+        const remoteBets = await fetchBetsFromSupabase();
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (remoteBets.length > 0) {
+          setBets(remoteBets);
+          setLocalBackupBets(remoteBets);
+          setBetsDataSource('supabase');
+          hasHydratedSupabaseRef.current = true;
+          return;
+        }
+
+        const seedBets = localBackupBets.length > 0 ? localBackupBets : getDemoBets();
+
+        if (seedBets.length > 0) {
+          await syncBetsToSupabase(seedBets, initialBank);
+
+          if (isCancelled) {
+            return;
+          }
+        }
+
+        setBets(seedBets);
+        setLocalBackupBets(seedBets);
+        setBetsDataSource('supabase');
+        hasHydratedSupabaseRef.current = true;
+        setNotice({
+          tone: 'info',
+          text: 'Пустая таблица Supabase была инициализирована текущими ставками.',
+        });
+      } catch (error) {
+        console.error(error);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setBetsDataSource('local_backup');
+        setNotice({
+          tone: 'error',
+          text: 'Не удалось загрузить ставки из Supabase. Включён резервный localStorage.',
+        });
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingRemoteBets(false);
+        }
+      }
+    }
+
+    hydrateBets();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setLocalBackupBets(bets);
+  }, [bets, setLocalBackupBets]);
+
+  useEffect(() => {
+    if (!hasHydratedSupabaseRef.current || betsDataSource !== 'supabase') {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function syncSnapshot() {
+      setIsSyncingRemoteBets(true);
+
+      try {
+        await syncBetsToSupabase(bets, initialBank);
+      } catch (error) {
+        console.error(error);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setBetsDataSource('local_backup');
+        setNotice({
+          tone: 'error',
+          text: 'Не удалось синхронизировать изменения с Supabase. Данные продолжают храниться локально.',
+        });
+      } finally {
+        if (!isCancelled) {
+          setIsSyncingRemoteBets(false);
+        }
+      }
+    }
+
+    void syncSnapshot();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [bets, betsDataSource, initialBank]);
 
   function handleSaveBet(draft: BetDraft) {
     if (editingBetId) {
@@ -229,8 +366,8 @@ export default function App() {
               Чистый рабочий журнал ставок с точным пересчётом банка.
             </h1>
             <p className="max-w-2xl text-base text-slate-300">
-              Журнал стартует с demo-строк, хранит всё в localStorage и пересчитывает каждую
-              строку строго сверху вниз при любом изменении.
+              Журнал загружает ставки из Supabase, а стартовый банк и тема остаются локально в
+              браузере. Пересчёт каждой строки по-прежнему идёт строго сверху вниз.
             </p>
           </div>
 
@@ -241,9 +378,9 @@ export default function App() {
               <p className="mt-2 text-sm text-slate-300">Пересчитывается сверху вниз по всем строкам</p>
             </div>
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-              <p className="text-xs uppercase tracking-[0.25em] text-slate-300">Контроль UX</p>
-              <p className="mt-3 text-lg font-semibold text-white">CSV, фильтры, edit/update без дублей</p>
-              <p className="mt-2 text-sm text-slate-300">Бизнес-логика и localStorage не меняются</p>
+              <p className="text-xs uppercase tracking-[0.25em] text-slate-300">Источник данных</p>
+              <p className="mt-3 text-lg font-semibold text-white">{betsDataSourceLabel}</p>
+              <p className="mt-2 text-sm text-slate-300">{betsSyncStatus}</p>
             </div>
           </div>
         </div>
