@@ -113,6 +113,18 @@ body::after {
     @apply inline-flex items-center rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  .dialog-actions {
+    @apply flex flex-col-reverse gap-3 sm:flex-row sm:justify-end;
+  }
+
+  .dialog-cancel-button {
+    @apply inline-flex w-full items-center justify-center rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-slate-200 sm:w-auto;
+  }
+
+  .dialog-confirm-button {
+    @apply inline-flex w-full items-center justify-center rounded-full border border-red-700 bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 sm:w-auto;
+  }
+
   .option-card {
     @apply flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4;
   }
@@ -148,12 +160,23 @@ html[data-theme='dark'] .panel {
 
 html[data-theme='dark'] .field-input,
 html[data-theme='dark'] .toolbar-button-secondary,
+html[data-theme='dark'] .dialog-cancel-button,
 html[data-theme='dark'] .option-card,
 html[data-theme='dark'] .table-action,
 html[data-theme='dark'] .data-surface {
   background: rgba(15, 23, 42, 0.74) !important;
   border-color: rgba(148, 163, 184, 0.2) !important;
   color: #e5e7eb !important;
+}
+
+html[data-theme='dark'] .dialog-confirm-button {
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  color: #fff !important;
+}
+
+html[data-theme='dark'] .dialog-confirm-button:hover {
+  background: #ef4444 !important;
 }
 
 html[data-theme='dark'] .field-input::placeholder {

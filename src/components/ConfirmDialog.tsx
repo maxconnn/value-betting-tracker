@@ -32,16 +32,16 @@ export function ConfirmDialog({
           <p className="text-sm leading-6 text-slate-600">{description}</p>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="dialog-actions mt-6">
+          <button className="dialog-cancel-button" type="button" onClick={onCancel}>
+            {cancelLabel}
+          </button>
           <button
-            className="inline-flex items-center rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-200"
+            className="dialog-confirm-button"
             type="button"
             onClick={onConfirm}
           >
             {confirmLabel}
-          </button>
-          <button className="toolbar-button-secondary" type="button" onClick={onCancel}>
-            {cancelLabel}
           </button>
         </div>
       </div>
