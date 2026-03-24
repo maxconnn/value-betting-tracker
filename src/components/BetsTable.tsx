@@ -130,7 +130,7 @@ export function BetsTable({
         </div>
       </div>
 
-      <div className="max-h-[32rem] overflow-auto overscroll-contain lg:max-h-[64rem]">
+      <div className="max-h-[32rem] overflow-auto lg:max-h-[64rem]">
         <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-slate-950 text-white">
             <tr>
