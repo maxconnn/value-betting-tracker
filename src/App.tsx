@@ -28,7 +28,26 @@ function createBetId() {
     return crypto.randomUUID();
   }
 
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const maybeMessage = 'message' in error ? error.message : null;
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+      return maybeMessage.trim();
+    }
+  }
+
+  return 'Unknown Supabase error';
 }
 
 export default function App() {
@@ -44,7 +63,7 @@ export default function App() {
       sanitize: normalizeStoredBets,
     },
   );
-  const [bets, setBets] = useState<BetEntry[]>(localBackupBets);
+  const [bets, setBets] = useState<BetEntry[]>(isSupabaseConfigured ? [] : localBackupBets);
   const [theme, setTheme] = useLocalStorage<ThemeMode>(STORAGE_KEYS.theme, 'light', {
     sanitize: (value) => (value === 'dark' ? 'dark' : 'light'),
   });
@@ -142,11 +161,21 @@ export default function App() {
         const seedBets = localBackupBets.length > 0 ? localBackupBets : getDemoBets();
 
         if (seedBets.length > 0) {
-          await syncBetsToSupabase(seedBets, initialBank);
+          const syncedSeedBets = await syncBetsToSupabase(seedBets, initialBank);
 
           if (isCancelled) {
             return;
           }
+
+          setBets(syncedSeedBets);
+          setLocalBackupBets(syncedSeedBets);
+          setBetsDataSource('supabase');
+          hasHydratedSupabaseRef.current = true;
+          setNotice({
+            tone: 'info',
+            text: 'Пустая таблица Supabase была инициализирована текущими ставками.',
+          });
+          return;
         }
 
         setBets(seedBets);
@@ -158,16 +187,17 @@ export default function App() {
           text: 'Пустая таблица Supabase была инициализирована текущими ставками.',
         });
       } catch (error) {
-        console.error(error);
+        console.error('[Supabase bets] hydrate:error', error);
 
         if (isCancelled) {
           return;
         }
 
         setBetsDataSource('local_backup');
+        setBets(localBackupBets);
         setNotice({
           tone: 'error',
-          text: 'Не удалось загрузить ставки из Supabase. Включён резервный localStorage.',
+          text: `Не удалось загрузить ставки из Supabase: ${getErrorMessage(error)}. Включён резервный localStorage.`,
         });
       } finally {
         if (!isCancelled) {
@@ -198,9 +228,22 @@ export default function App() {
       setIsSyncingRemoteBets(true);
 
       try {
-        await syncBetsToSupabase(bets, initialBank);
+        const syncedBets = await syncBetsToSupabase(bets, initialBank);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setLocalBackupBets(syncedBets);
+        const betsChanged =
+          syncedBets.length !== bets.length ||
+          syncedBets.some((bet, index) => bet.id !== bets[index]?.id);
+
+        if (betsChanged) {
+          setBets(syncedBets);
+        }
       } catch (error) {
-        console.error(error);
+        console.error('[Supabase bets] sync:error', error);
 
         if (isCancelled) {
           return;
@@ -209,7 +252,7 @@ export default function App() {
         setBetsDataSource('local_backup');
         setNotice({
           tone: 'error',
-          text: 'Не удалось синхронизировать изменения с Supabase. Данные продолжают храниться локально.',
+          text: `Не удалось синхронизировать изменения с Supabase: ${getErrorMessage(error)}. Данные сохранены только локально.`,
         });
       } finally {
         if (!isCancelled) {
