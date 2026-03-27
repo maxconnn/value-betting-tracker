@@ -101,10 +101,12 @@ export function AppShell({
                 <p className="hidden text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500 md:block">
                   Dashboard
                 </p>
-                <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
+                <h2 className="hidden text-2xl font-semibold tracking-tight text-white md:block md:text-3xl">
                   {headerTitle}
                 </h2>
-                <p className="max-w-3xl text-sm leading-6 text-slate-400">{headerDescription}</p>
+                <p className="hidden max-w-3xl text-sm leading-6 text-slate-400 md:block">
+                  {headerDescription}
+                </p>
               </div>
 
               {headerActions ? (

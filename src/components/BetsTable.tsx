@@ -161,9 +161,9 @@ export function BetsTable({
         </div>
       </div>
 
-      <div className="max-h-[32rem] overflow-auto pb-1 lg:max-h-[64rem]">
+      <div className="overflow-x-auto overflow-y-visible pb-1 lg:max-h-[64rem] lg:overflow-y-auto">
         <table className="min-w-[1040px] border-separate border-spacing-0 text-left text-sm md:min-w-full">
-          <thead className="sticky top-0 z-10 bg-slate-950 text-white">
+          <thead className="bg-slate-950 text-white lg:sticky lg:top-0 lg:z-10">
             <tr>
               <th className="px-3 py-3 font-semibold md:px-4">№</th>
               <th className="px-3 py-3 font-semibold md:px-4">Дата</th>
