@@ -426,6 +426,9 @@ export default function App() {
     setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
   }
 
+  const themeToggleButtonClass =
+    theme === 'dark' ? 'theme-light-button' : 'theme-dark-button';
+
   return (
     <div className="dashboard-app">
       <AppShell
@@ -443,7 +446,7 @@ export default function App() {
               {betsDataSourceLabel}
             </span>
             <button
-              className="toolbar-button-secondary hidden md:inline-flex"
+              className={`${themeToggleButtonClass} hidden md:inline-flex`}
               type="button"
               onClick={handleToggleTheme}
             >
@@ -467,7 +470,7 @@ export default function App() {
             <p className="text-sm font-medium text-white">{betsDataSourceLabel}</p>
             <p className="text-xs leading-5 text-slate-400">{betsSyncStatus}</p>
             <button
-              className="mobile-drawer-theme-button md:hidden"
+              className={`${themeToggleButtonClass} md:hidden`}
               type="button"
               onClick={handleToggleTheme}
             >

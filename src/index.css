@@ -474,18 +474,32 @@ body::after {
     opacity: 0.74;
   }
 
-  .mobile-drawer-theme-button {
+  .theme-dark-button,
+  .theme-light-button {
     @apply inline-flex items-center justify-center border px-5 py-3 text-sm font-semibold transition;
     min-height: 44px;
     border-radius: var(--radius-control);
-    border-color: var(--button-dark-border);
-    background-color: var(--button-dark-bg);
-    color: var(--button-dark-text);
   }
 
-  .mobile-drawer-theme-button:hover {
-    border-color: var(--button-dark-border-hover);
-    background-color: var(--button-dark-bg-hover);
+  .theme-dark-button {
+    border-color: #303030;
+    background-color: #111111;
+    color: #fafafa;
+  }
+
+  .theme-dark-button:hover {
+    border-color: #404040;
+    background-color: #1a1a1a;
+  }
+
+  .theme-light-button {
+    border-color: #d1d5db;
+    background-color: #ffffff;
+    color: #111111;
+  }
+
+  .theme-light-button:hover {
+    background-color: #f3f4f6;
   }
 
   .section-stack {
