@@ -407,7 +407,8 @@ body::after {
   }
 
   .app-header {
-    @apply z-30 border-b md:sticky md:top-0;
+    @apply border-b;
+    position: static;
     border-color: var(--border-color);
     background-color: var(--header-bg);
   }
@@ -524,6 +525,14 @@ body::after {
     @apply hidden gap-2 md:flex md:flex-wrap;
   }
 
+}
+
+@media (min-width: 768px) {
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
 }
 
 .dashboard-app .text-slate-500,
@@ -757,7 +766,7 @@ html[data-theme='light'] .dashboard-app .table-action-danger {
   color: #991b1b !important;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 767px) {
   .dashboard-app,
   .app-shell,
   .app-main {
@@ -765,6 +774,9 @@ html[data-theme='light'] .dashboard-app .table-action-danger {
     height: auto;
     overflow: visible;
   }
+}
+
+@media (max-width: 639px) {
 
   .dashboard-app .toolbar-button,
   .dashboard-app .toolbar-button-secondary {
