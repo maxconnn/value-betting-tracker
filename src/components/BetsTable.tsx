@@ -161,7 +161,7 @@ export function BetsTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto overflow-y-visible pb-1 lg:max-h-[64rem] lg:overflow-y-auto">
+      <div className="bets-table-scroll pb-1">
         <table className="min-w-[1040px] border-separate border-spacing-0 text-left text-sm md:min-w-full">
           <thead className="bg-slate-950 text-white lg:sticky lg:top-0 lg:z-10">
             <tr>

@@ -416,6 +416,22 @@ body::after {
     @apply flex-1 px-4 py-5 md:min-h-0 md:px-6 md:py-6 lg:px-8 lg:py-8;
   }
 
+  .bets-table-scroll {
+    max-height: min(65vh, 32rem);
+    overflow-x: auto;
+    overflow-y: auto;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  @media (min-width: 1024px) {
+    .bets-table-scroll {
+      max-height: 64rem;
+    }
+  }
+
   .shell-menu-button {
     @apply inline-flex items-center justify-center border px-3 py-2 text-sm font-medium transition;
     min-height: 40px;
@@ -431,9 +447,11 @@ body::after {
   }
 
   .shell-menu-button-icon {
-    width: 40px;
-    padding-left: 0;
-    padding-right: 0;
+    width: auto;
+    min-height: auto;
+    border-color: transparent;
+    background-color: transparent;
+    padding: 0;
   }
 
   .shell-menu-icon {
@@ -448,6 +466,25 @@ body::after {
     height: 1.5px;
     border-radius: 999px;
     background-color: currentColor;
+  }
+
+  .shell-menu-button-icon:hover {
+    border-color: transparent;
+    background-color: transparent;
+    opacity: 0.74;
+  }
+
+  .mobile-drawer-theme-button {
+    @apply inline-flex items-center justify-center border px-5 py-3 text-sm font-semibold transition;
+    min-height: 44px;
+    border-radius: var(--radius-control);
+    border-color: var(--neutral-light-border);
+    background-color: #ffffff;
+    color: #111111;
+  }
+
+  .mobile-drawer-theme-button:hover {
+    background-color: var(--neutral-light-bg);
   }
 
   .section-stack {
@@ -545,8 +582,10 @@ body::after {
   height: 100%;
   width: min(86vw, 22rem);
   flex-direction: column;
+  overflow-y: auto;
   border-right: 1px solid var(--border-color);
   background-color: var(--sidebar-bg);
+  -webkit-overflow-scrolling: touch;
 }
 
 .dashboard-app .border-slate-800 {

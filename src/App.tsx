@@ -467,7 +467,7 @@ export default function App() {
             <p className="text-sm font-medium text-white">{betsDataSourceLabel}</p>
             <p className="text-xs leading-5 text-slate-400">{betsSyncStatus}</p>
             <button
-              className="toolbar-button-secondary md:hidden"
+              className="mobile-drawer-theme-button md:hidden"
               type="button"
               onClick={handleToggleTheme}
             >
