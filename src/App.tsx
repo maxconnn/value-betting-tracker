@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnalyticsGrid } from './components/AnalyticsGrid';
+import { AppShell, type AppShellSection } from './components/AppShell';
 import { BankrollSettings } from './components/BankrollSettings';
 import { BankrollChart } from './components/BankrollChart';
 import { BetForm } from './components/BetForm';
 import { BetsTable } from './components/BetsTable';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { JournalControls } from './components/JournalControls';
+import { SectionHeader } from './components/SectionHeader';
 import { StatsCards } from './components/StatsCards';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { fetchBetsFromSupabase, syncBetsToSupabase } from './lib/betsRepository';
@@ -22,6 +24,8 @@ import {
   normalizeInitialBank,
   normalizeStoredBets,
 } from './utils/storage';
+
+type DashboardSectionId = 'journal' | 'bankroll' | 'analytics' | 'tools';
 
 function createBetId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -64,7 +68,7 @@ export default function App() {
     },
   );
   const [bets, setBets] = useState<BetEntry[]>(isSupabaseConfigured ? [] : localBackupBets);
-  const [theme, setTheme] = useLocalStorage<ThemeMode>(STORAGE_KEYS.theme, 'light', {
+  const [theme, setTheme] = useLocalStorage<ThemeMode>(STORAGE_KEYS.theme, 'dark', {
     sanitize: (value) => (value === 'dark' ? 'dark' : 'light'),
   });
   const [isLoadingRemoteBets, setIsLoadingRemoteBets] = useState(isSupabaseConfigured);
@@ -74,6 +78,7 @@ export default function App() {
   );
   const [editingBetId, setEditingBetId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<DashboardSectionId>('journal');
   const [filters, setFilters] = useState<JournalFilters>({
     search: '',
     result: 'all',
@@ -115,6 +120,9 @@ export default function App() {
       return true;
     });
   }, [filters, recalculatedBets]);
+
+  const hasActiveFilters =
+    filters.search.trim() !== '' || filters.result !== 'all' || filters.classification !== 'all';
   const betsDataSourceLabel =
     betsDataSource === 'supabase' ? 'Supabase' : 'Резервный localStorage';
   const betsSyncStatus = isLoadingRemoteBets
@@ -124,6 +132,55 @@ export default function App() {
       : betsDataSource === 'supabase'
         ? 'Ставки читаются и записываются в общую базу.'
         : 'При недоступности Supabase журнал продолжает работать локально.';
+
+  const dashboardSections: AppShellSection[] = [
+    {
+      id: 'journal',
+      label: 'Журнал',
+      description: 'Таблица ставок, inline edit и полная форма.',
+      meta: `${recalculatedBets.length}`,
+    },
+    {
+      id: 'bankroll',
+      label: 'Банкролл',
+      description: 'Стартовый банк, P/L, ROI и ключевые метрики.',
+      meta: formatCurrency(stats.currentBankroll),
+    },
+    {
+      id: 'analytics',
+      label: 'Аналитика',
+      description: 'График банка и аналитические разрезы по журналу.',
+    },
+    {
+      id: 'tools',
+      label: 'Поиск / CSV',
+      description: 'Фильтрация, импорт и экспорт журнала.',
+      meta: hasActiveFilters ? 'Фильтры' : undefined,
+    },
+  ];
+
+  const activeSectionMeta: Record<DashboardSectionId, { title: string; description: string }> = {
+    journal: {
+      title: 'Журнал ставок',
+      description:
+        'Основной рабочий экран для ведения ставок, просмотра строк и редактирования без нарушения top-down пересчёта банка.',
+    },
+    bankroll: {
+      title: 'Банкролл и метрики',
+      description:
+        'Отдельный раздел для контроля стартового банка, общего результата журнала, ROI и winrate без смешивания с рабочей таблицей.',
+    },
+    analytics: {
+      title: 'Аналитика результатов',
+      description:
+        'График и аналитические срезы строятся по уже пересчитанным строкам и помогают быстрее оценить качество стратегии.',
+    },
+    tools: {
+      title: 'Поиск, фильтры и обмен CSV',
+      description:
+        'Фильтры влияют только на отображение таблицы, а CSV-операции работают поверх текущего журнала без поломки ID и порядка строк.',
+    },
+  };
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -206,7 +263,7 @@ export default function App() {
       }
     }
 
-    hydrateBets();
+    void hydrateBets();
 
     return () => {
       isCancelled = true;
@@ -266,7 +323,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [bets, betsDataSource, initialBank]);
+  }, [bets, betsDataSource, initialBank, setLocalBackupBets]);
 
   function handleSaveBet(draft: BetDraft) {
     if (editingBetId) {
@@ -370,86 +427,135 @@ export default function App() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col gap-6 px-4 py-6 md:px-6 lg:px-8">
-      <BetsTable
-        bets={visibleBets}
-        totalRows={recalculatedBets.length}
-        hasActiveFilters={
-          filters.search.trim() !== '' || filters.result !== 'all' || filters.classification !== 'all'
+    <div className="dashboard-app">
+      <AppShell
+        appTitle="Value Betting Tracker"
+        appSubtitle="Минималистичная операционная панель для журнала ставок, банкролла и аналитики."
+        sections={dashboardSections}
+        activeSection={activeSection}
+        onSelectSection={(sectionId) => setActiveSection(sectionId as DashboardSectionId)}
+        headerTitle={activeSectionMeta[activeSection].title}
+        headerDescription={activeSectionMeta[activeSection].description}
+        headerActions={
+          <>
+            <span className="stat-pill">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+              {betsDataSourceLabel}
+            </span>
+            <button className="toolbar-button-secondary" type="button" onClick={handleToggleTheme}>
+              {theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            </button>
+          </>
         }
-        editingBetId={editingBetId}
-        onEdit={(id) => setEditingBetId(id)}
-        onQuickSave={handleQuickSaveBet}
-        onDelete={handleRequestDelete}
-      />
-
-      <BetForm
-        editingBet={editingBet}
-        bankrollAtBet={bankrollAtBet}
-        onSubmit={handleSaveBet}
-        onCancelEdit={() => setEditingBetId(null)}
-      />
-
-      <section className="overflow-hidden rounded-[34px] border border-slate-900/10 bg-slate-900 text-white shadow-[0_25px_90px_rgba(15,23,42,0.24)]">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1.3fr_0.7fr] lg:p-8">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-accent">
-                Value betting tracker
-              </p>
-              <button
-                className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-white/20"
-                type="button"
-                onClick={handleToggleTheme}
-              >
-                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              </button>
-            </div>
-            <h1 className="max-w-2xl text-4xl font-bold leading-tight md:text-5xl">
-              Чистый рабочий журнал ставок с точным пересчётом банка.
-            </h1>
-            <p className="max-w-2xl text-base text-slate-300">
-              Журнал загружает ставки из Supabase, а стартовый банк и тема остаются локально в
-              браузере. Пересчёт каждой строки по-прежнему идёт строго сверху вниз.
+        headerSummary={
+          <>
+            <span className="stat-pill">Банк: {formatCurrency(stats.currentBankroll)}</span>
+            <span className="stat-pill">Строк: {stats.totalRows}</span>
+            <span className="stat-pill">Видимо: {visibleBets.length}</span>
+            <span className="stat-pill">{betsSyncStatus}</span>
+          </>
+        }
+        sidebarFooter={
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+              Data source
             </p>
+            <p className="text-sm font-medium text-white">{betsDataSourceLabel}</p>
+            <p className="text-xs leading-5 text-slate-400">{betsSyncStatus}</p>
           </div>
+        }
+      >
+        {activeSection === 'journal' ? (
+          <div className="section-stack">
+            <SectionHeader
+              eyebrow="Journal workspace"
+              title="Журнал и редактор ставок"
+              description="Основной рабочий экран для таблицы, полного ввода новой ставки и быстрых правок существующих строк."
+              actions={
+                hasActiveFilters ? (
+                  <button
+                    className="toolbar-button-secondary"
+                    type="button"
+                    onClick={() => setActiveSection('tools')}
+                  >
+                    Открыть фильтры
+                  </button>
+                ) : undefined
+              }
+            />
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-              <p className="text-xs uppercase tracking-[0.25em] text-slate-300">Текущий банк</p>
-              <p className="mt-3 text-3xl font-bold">{formatCurrency(stats.currentBankroll)}</p>
-              <p className="mt-2 text-sm text-slate-300">Пересчитывается сверху вниз по всем строкам</p>
-            </div>
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
-              <p className="text-xs uppercase tracking-[0.25em] text-slate-300">Источник данных</p>
-              <p className="mt-3 text-lg font-semibold text-white">{betsDataSourceLabel}</p>
-              <p className="mt-2 text-sm text-slate-300">{betsSyncStatus}</p>
-            </div>
+            <BetsTable
+              bets={visibleBets}
+              totalRows={recalculatedBets.length}
+              hasActiveFilters={hasActiveFilters}
+              editingBetId={editingBetId}
+              onEdit={(id) => setEditingBetId(id)}
+              onQuickSave={handleQuickSaveBet}
+              onDelete={handleRequestDelete}
+            />
+
+            <BetForm
+              editingBet={editingBet}
+              bankrollAtBet={bankrollAtBet}
+              onSubmit={handleSaveBet}
+              onCancelEdit={() => setEditingBetId(null)}
+            />
           </div>
-        </div>
-      </section>
+        ) : null}
 
-      <BankrollSettings
-        initialBank={initialBank}
-        currentBankroll={stats.currentBankroll}
-        rowsCount={stats.totalRows}
-        onChange={(value) => setInitialBank(value)}
-      />
+        {activeSection === 'bankroll' ? (
+          <div className="section-stack">
+            <SectionHeader
+              eyebrow="Bankroll control"
+              title="Банкролл и ключевые метрики"
+              description="Чистый отдельный раздел для изменения стартового банка и контроля основных метрик журнала."
+            />
 
-      <StatsCards stats={stats} />
-      <BankrollChart points={analytics.bankrollChart} />
-      <AnalyticsGrid analytics={analytics} />
+            <BankrollSettings
+              initialBank={initialBank}
+              currentBankroll={stats.currentBankroll}
+              rowsCount={stats.totalRows}
+              onChange={(value) => setInitialBank(value)}
+            />
 
-      <JournalControls
-        filters={filters}
-        totalRows={recalculatedBets.length}
-        visibleRows={visibleBets.length}
-        onChange={setFilters}
-        onReset={handleResetFilters}
-        onExport={handleExportCsv}
-        onImport={handleImportCsv}
-        notice={notice}
-      />
+            <StatsCards stats={stats} />
+          </div>
+        ) : null}
+
+        {activeSection === 'analytics' ? (
+          <div className="section-stack">
+            <SectionHeader
+              eyebrow="Analytics"
+              title="График и аналитические разрезы"
+              description="Рост банка по порядку ставок и аналитика по рынкам, классификациям, типам ставок и лигам."
+            />
+
+            <BankrollChart points={analytics.bankrollChart} />
+            <AnalyticsGrid analytics={analytics} />
+          </div>
+        ) : null}
+
+        {activeSection === 'tools' ? (
+          <div className="section-stack">
+            <SectionHeader
+              eyebrow="Search and data"
+              title="Поиск, фильтры и обмен CSV"
+              description="Здесь сосредоточены фильтрация журнала, импорт, экспорт и текущие notice-сообщения по операциям с данными."
+            />
+
+            <JournalControls
+              filters={filters}
+              totalRows={recalculatedBets.length}
+              visibleRows={visibleBets.length}
+              onChange={setFilters}
+              onReset={handleResetFilters}
+              onExport={handleExportCsv}
+              onImport={handleImportCsv}
+              notice={notice}
+            />
+          </div>
+        ) : null}
+      </AppShell>
 
       <ConfirmDialog
         open={Boolean(pendingDeleteBet)}
@@ -462,6 +568,6 @@ export default function App() {
         onConfirm={handleConfirmDelete}
         onCancel={handleCloseDeleteDialog}
       />
-    </main>
+    </div>
   );
 }

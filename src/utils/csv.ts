@@ -137,6 +137,10 @@ function transformImportedValue(field: keyof BetEntry, value: string) {
   const trimmedValue = value.trim();
 
   if (field === 'marketType') {
+    if (trimmedValue.toLowerCase() === 'угловые / периоды') {
+      return 'corners_periods';
+    }
+
     return marketTypeImportMap[trimmedValue.toLowerCase()] ?? trimmedValue;
   }
 

@@ -20,9 +20,9 @@ interface JournalControlsProps {
 }
 
 const noticeStyles = {
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  error: 'border-red-200 bg-red-50 text-red-900',
-  info: 'border-sky-200 bg-sky-50 text-sky-900',
+  success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+  error: 'border-red-500/30 bg-red-500/10 text-red-200',
+  info: 'border-sky-500/30 bg-sky-500/10 text-sky-200',
 } as const;
 
 export function JournalControls({
@@ -47,7 +47,7 @@ export function JournalControls({
   }
 
   return (
-    <section className="panel p-6">
+    <section className="panel p-4 sm:p-6">
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div className="space-y-2">
@@ -61,7 +61,7 @@ export function JournalControls({
             </p>
           </div>
 
-          <div className="rounded-3xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-slate-700">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-300 xl:max-w-max">
             Показано <span className="font-bold text-slate-950">{visibleRows}</span> из{' '}
             <span className="font-bold text-slate-950">{totalRows}</span> строк
           </div>
@@ -115,19 +115,19 @@ export function JournalControls({
             </select>
           </label>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <button className="toolbar-button" type="button" onClick={onExport}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <button className="toolbar-button sm:w-auto" type="button" onClick={onExport}>
               Экспорт CSV
             </button>
             <button
-              className="toolbar-button-secondary"
+              className="toolbar-button-secondary sm:w-auto"
               type="button"
               onClick={() => fileInputRef.current?.click()}
             >
               Импорт CSV
             </button>
             <button
-              className="toolbar-button-secondary"
+              className="toolbar-button-secondary sm:w-auto"
               disabled={!hasActiveFilters}
               type="button"
               onClick={onReset}
@@ -158,7 +158,7 @@ export function JournalControls({
 
           {notice ? (
             <div
-              className={`rounded-2xl border px-4 py-3 text-sm font-medium ${noticeStyles[notice.tone]}`}
+              className={`rounded-2xl border px-4 py-3 text-sm font-medium xl:max-w-[32rem] ${noticeStyles[notice.tone]}`}
             >
               {notice.text}
             </div>

@@ -24,7 +24,10 @@ export const marketTypeLabels: Record<MarketType, string> = {
   outcomes: 'Исходы',
   handicaps: 'Форы',
   totals: 'Тоталы',
-  corners_periods: 'Угловые / периоды',
+  individual_totals: 'Индивидуальные тоталы',
+  individual_handicaps: 'Индивидуальные форы',
+  corners: 'Угловые',
+  periods: 'Периоды',
 };
 
 export const leagueTypeLabels: Record<LeagueType, string> = {
@@ -41,25 +44,17 @@ export const classificationLabels: Record<BetClassification, string> = {
 };
 
 export const classificationBadgeStyles: Record<BetClassification, string> = {
-  green:
-    'border-emerald-300 bg-emerald-100 text-emerald-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
-  yellow:
-    'border-amber-300 bg-amber-100 text-amber-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
-  red:
-    'border-rose-300 bg-rose-100 text-rose-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
-  skip:
-    'border-slate-300 bg-slate-200 text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
+  green: 'badge-success-light',
+  yellow: 'badge-warning-light',
+  red: 'badge-danger-fill',
+  skip: 'badge-neutral',
 };
 
 export const resultBadgeStyles: Record<BetResult, string> = {
-  not_played:
-    'border-sky-300 bg-sky-100 text-sky-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
-  won:
-    'border-emerald-300 bg-emerald-100 text-emerald-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
-  lost:
-    'border-rose-300 bg-rose-100 text-rose-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
-  refund:
-    'border-stone-300 bg-stone-100 text-stone-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]',
+  not_played: 'badge-info-light',
+  won: 'badge-success-light',
+  lost: 'badge-danger-fill',
+  refund: 'badge-neutral',
 };
 
 export function formatCurrency(value: number) {

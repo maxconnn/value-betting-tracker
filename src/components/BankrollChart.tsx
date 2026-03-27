@@ -36,7 +36,7 @@ export function BankrollChart({ points }: BankrollChartProps) {
   const valueMeta = getValueMeta(points);
 
   return (
-    <section className="panel p-6">
+    <section className="panel p-4 sm:p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent">
@@ -50,25 +50,25 @@ export function BankrollChart({ points }: BankrollChartProps) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Минимум</p>
-            <p className="mt-2 text-lg font-bold text-slate-950">{formatCurrency(valueMeta.min)}</p>
+            <p className="mt-2 text-lg font-semibold text-white">{formatCurrency(valueMeta.min)}</p>
           </div>
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Максимум</p>
-            <p className="mt-2 text-lg font-bold text-slate-950">{formatCurrency(valueMeta.max)}</p>
+            <p className="mt-2 text-lg font-semibold text-white">{formatCurrency(valueMeta.max)}</p>
           </div>
-          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Текущее</p>
-            <p className="mt-2 text-lg font-bold text-slate-950">
+            <p className="mt-2 text-lg font-semibold text-white">
               {formatCurrency(valueMeta.latest)}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-6 overflow-x-auto">
-        <div className="min-w-[760px] rounded-[28px] border border-stone-200 bg-gradient-to-b from-stone-50 to-white p-4">
+      <div className="mt-6 overflow-x-auto pb-1">
+        <div className="min-w-[620px] rounded-[28px] border border-slate-800 bg-slate-950 p-3 sm:min-w-[760px] sm:p-4">
           <svg
             className="h-[260px] w-full"
             viewBox={`0 0 ${chartWidth} ${chartHeight + 40}`}
@@ -78,9 +78,9 @@ export function BankrollChart({ points }: BankrollChartProps) {
           >
             <defs>
               <linearGradient id="bankroll-line" x1="0%" x2="100%" y1="0%" y2="0%">
-                <stop offset="0%" stopColor="#0f766e" />
-                <stop offset="55%" stopColor="#0ea5e9" />
-                <stop offset="100%" stopColor="#cb7c30" />
+                <stop offset="0%" stopColor="#525252" />
+                <stop offset="55%" stopColor="#a3a3a3" />
+                <stop offset="100%" stopColor="#fafafa" />
               </linearGradient>
             </defs>
 
@@ -93,7 +93,7 @@ export function BankrollChart({ points }: BankrollChartProps) {
                   x2={chartWidth}
                   y1={y}
                   y2={y}
-                  stroke="rgba(148,163,184,0.25)"
+                  stroke="rgba(82,82,82,0.45)"
                   strokeDasharray="6 8"
                 />
               );
@@ -142,13 +142,13 @@ export function BankrollChart({ points }: BankrollChartProps) {
           </svg>
 
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-            <span className="status-badge border border-emerald-200 bg-emerald-50 text-emerald-900">
+            <span className="status-badge border badge-success-light">
               Зелёная точка: строка не ухудшила банк
             </span>
-            <span className="status-badge border border-red-200 bg-red-50 text-red-900">
+            <span className="status-badge border badge-danger-fill">
               Красная точка: строка ушла в минус
             </span>
-            <span className="status-badge border border-slate-200 bg-slate-100 text-slate-800">
+            <span className="status-badge border badge-neutral">
               Серая точка: пропуск
             </span>
           </div>

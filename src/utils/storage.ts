@@ -24,6 +24,12 @@ const LEGACY_RESULT_MAP: Record<string, BetResult> = {
   Возврат: 'refund',
 };
 
+const LEGACY_MARKET_TYPE_MAP: Record<string, MarketType | 'corners_periods'> = {
+  corners_periods: 'corners_periods',
+  team_totals: 'individual_totals',
+  team_handicaps: 'individual_handicaps',
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -79,6 +85,33 @@ function normalizeResult(value: unknown): BetResult {
   return 'not_played';
 }
 
+function normalizeMarketType(value: unknown, selection: unknown): MarketType {
+  if (typeof value === 'string') {
+    const normalizedValue = value.trim();
+
+    if (MARKET_TYPES.includes(normalizedValue as MarketType)) {
+      return normalizedValue as MarketType;
+    }
+
+    if (normalizedValue in LEGACY_MARKET_TYPE_MAP) {
+      const mappedValue = LEGACY_MARKET_TYPE_MAP[normalizedValue];
+
+      if (mappedValue !== 'corners_periods') {
+        return mappedValue;
+      }
+
+      const normalizedSelection = normalizeString(selection).toLowerCase();
+      if (normalizedSelection.includes('период')) {
+        return 'periods';
+      }
+
+      return 'corners';
+    }
+  }
+
+  return 'outcomes';
+}
+
 function normalizeDate(value: unknown) {
   const rawDate = normalizeString(value).trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : getTodayDateString();
@@ -125,7 +158,7 @@ function normalizeStoredBet(
     odds: roundMoney(normalizeNumber(value.odds, 2, 1.01)),
     edgePercent: roundMoney(normalizeNumber(value.edgePercent, 0, 0)),
     sampleSize: Math.round(normalizeNumber(value.sampleSize, 0, 0)),
-    marketType: normalizeEnum<MarketType>(value.marketType, MARKET_TYPES, 'outcomes'),
+    marketType: normalizeMarketType(value.marketType, value.selection),
     leagueType: normalizeEnum<LeagueType>(value.leagueType, LEAGUE_TYPES, 'top'),
     leagueName: normalizeString(value.leagueName).trim(),
     suspiciousMarket: normalizeBoolean(value.suspiciousMarket),
@@ -221,7 +254,7 @@ export function getDemoBets(): BetEntry[] {
       odds: 7.4,
       edgePercent: 12.5,
       sampleSize: 120,
-      marketType: 'corners_periods',
+      marketType: 'corners',
       leagueType: 'youth_low',
       leagueName: 'Junior League',
       suspiciousMarket: true,

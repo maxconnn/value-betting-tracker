@@ -23,12 +23,12 @@ interface BetsTableProps {
   onDelete: (id: string) => void;
 }
 
-const rowAccentClasses = {
-  green: 'bg-emerald-50/70',
-  yellow: 'bg-amber-50/70',
-  red: 'bg-rose-50/75',
-  skip: 'bg-slate-100/90',
-} as const;
+type QuickEditNumericField = 'odds' | 'edgePercent' | 'sampleSize';
+type QuickEditDraft = Omit<BetDraft, QuickEditNumericField> & {
+  odds: string;
+  edgePercent: string;
+  sampleSize: string;
+};
 
 function toDraft(row: RecalculatedBet): BetDraft {
   return {
@@ -48,6 +48,35 @@ function toDraft(row: RecalculatedBet): BetDraft {
   };
 }
 
+function toQuickEditDraft(row: RecalculatedBet): QuickEditDraft {
+  return {
+    ...toDraft(row),
+    odds: String(row.odds),
+    edgePercent: String(row.edgePercent),
+    sampleSize: String(row.sampleSize),
+  };
+}
+
+function parseQuickEditNumber(value: string, fallback: number) {
+  const normalized = value.trim().replace(',', '.');
+
+  if (normalized === '') {
+    return fallback;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toBetDraft(quickEditDraft: QuickEditDraft): BetDraft {
+  return {
+    ...quickEditDraft,
+    odds: parseQuickEditNumber(quickEditDraft.odds, 0),
+    edgePercent: parseQuickEditNumber(quickEditDraft.edgePercent, 0),
+    sampleSize: Math.max(0, Math.round(parseQuickEditNumber(quickEditDraft.sampleSize, 0))),
+  };
+}
+
 export function BetsTable({
   bets,
   totalRows,
@@ -58,7 +87,7 @@ export function BetsTable({
   onDelete,
 }: BetsTableProps) {
   const [quickEditId, setQuickEditId] = useState<string | null>(null);
-  const [quickEditDraft, setQuickEditDraft] = useState<BetDraft | null>(null);
+  const [quickEditDraft, setQuickEditDraft] = useState<QuickEditDraft | null>(null);
   const quickEditExists = useMemo(
     () => (quickEditId ? bets.some((bet) => bet.id === quickEditId) : false),
     [bets, quickEditId],
@@ -72,7 +101,7 @@ export function BetsTable({
 
   function openQuickEdit(row: RecalculatedBet) {
     setQuickEditId(row.id);
-    setQuickEditDraft(toDraft(row));
+    setQuickEditDraft(toQuickEditDraft(row));
   }
 
   function closeQuickEdit() {
@@ -80,7 +109,7 @@ export function BetsTable({
     setQuickEditDraft(null);
   }
 
-  function updateQuickField<K extends keyof BetDraft>(field: K, value: BetDraft[K]) {
+  function updateQuickField<K extends keyof QuickEditDraft>(field: K, value: QuickEditDraft[K]) {
     setQuickEditDraft((current) =>
       current
         ? {
@@ -96,8 +125,10 @@ export function BetsTable({
       return;
     }
 
+    const normalizedDraft = toBetDraft(quickEditDraft);
+
     onQuickSave(quickEditId, {
-      ...quickEditDraft,
+      ...normalizedDraft,
       event: quickEditDraft.event.trim(),
       selection: quickEditDraft.selection.trim(),
       leagueName: quickEditDraft.leagueName.trim(),
@@ -107,7 +138,7 @@ export function BetsTable({
 
   return (
     <section className="panel overflow-hidden">
-      <div className="flex flex-col gap-2 border-b border-stone-200 px-6 py-5">
+      <div className="flex flex-col gap-2 border-b border-stone-200 px-4 py-4 sm:px-6 sm:py-5">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent">Journal</p>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -130,21 +161,21 @@ export function BetsTable({
         </div>
       </div>
 
-      <div className="max-h-[32rem] overflow-auto lg:max-h-[64rem]">
-        <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
+      <div className="max-h-[32rem] overflow-auto pb-1 lg:max-h-[64rem]">
+        <table className="min-w-[1040px] border-separate border-spacing-0 text-left text-sm md:min-w-full">
           <thead className="sticky top-0 z-10 bg-slate-950 text-white">
             <tr>
-              <th className="px-4 py-3 font-semibold">№</th>
-              <th className="px-4 py-3 font-semibold">Дата</th>
-              <th className="px-4 py-3 font-semibold">Событие</th>
-              <th className="px-4 py-3 font-semibold">Ставка / Рынок</th>
-              <th className="px-4 py-3 font-semibold">Коэфф</th>
-              <th className="px-4 py-3 font-semibold">Перевес (%)</th>
-              <th className="px-4 py-3 font-semibold">Выборка</th>
-              <th className="px-4 py-3 font-semibold">Сумма</th>
-              <th className="px-4 py-3 font-semibold">Результат</th>
-              <th className="px-4 py-3 font-semibold">+/-</th>
-              <th className="px-4 py-3 font-semibold">Банк после</th>
+              <th className="px-3 py-3 font-semibold md:px-4">№</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Дата</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Событие</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Ставка / Рынок</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Коэфф</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Перевес (%)</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Выборка</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Сумма</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Результат</th>
+              <th className="px-3 py-3 font-semibold md:px-4">+/-</th>
+              <th className="px-3 py-3 font-semibold md:px-4">Банк после</th>
             </tr>
           </thead>
 
@@ -169,14 +200,14 @@ export function BetsTable({
             {bets.map((bet) => (
               <Fragment key={bet.id}>
                 <tr
-                  className={`border-b border-stone-200/80 align-top ${rowAccentClasses[bet.classification]} ${
+                  className={`border-b border-stone-200/80 align-top ${
                     editingBetId === bet.id ? 'ring-2 ring-inset ring-accent/40' : ''
                   }`}
                 >
-                  <td className="px-4 py-4 align-top font-semibold text-slate-700">{bet.index}</td>
-                  <td className="px-4 py-4 align-top whitespace-nowrap">{formatDate(bet.date)}</td>
-                  <td className="px-4 py-4 align-top">
-                    <div className="min-w-[240px] space-y-3">
+                  <td className="px-3 py-4 align-top font-semibold text-slate-700 md:px-4">{bet.index}</td>
+                  <td className="px-3 py-4 align-top whitespace-nowrap md:px-4">{formatDate(bet.date)}</td>
+                  <td className="px-3 py-4 align-top md:px-4">
+                    <div className="min-w-[210px] space-y-3 sm:min-w-[240px]">
                       <div>
                         <p className="font-semibold text-slate-950">{bet.event}</p>
                         <p className="text-xs text-slate-500">
@@ -191,7 +222,7 @@ export function BetsTable({
                           {classificationLabels[bet.classification]}
                         </span>
                         {bet.riskMultiplier < 1 ? (
-                          <span className="status-badge border border-slate-300 bg-slate-200 text-slate-800">
+                          <span className="status-badge border badge-neutral">
                             Risk 0.8
                           </span>
                         ) : null}
@@ -220,20 +251,20 @@ export function BetsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-4 align-top">
-                    <div className="min-w-[200px] space-y-2">
+                  <td className="px-3 py-4 align-top md:px-4">
+                    <div className="min-w-[190px] space-y-2 sm:min-w-[200px]">
                       <p className="font-semibold text-slate-950">{bet.selection}</p>
                       <div className="flex flex-wrap gap-2">
-                        <span className="status-badge border border-stone-200 bg-white text-slate-700">
+                        <span className="status-badge border badge-neutral">
                           {marketTypeLabels[bet.marketType]}
                         </span>
                         {bet.suspiciousMarket ? (
-                          <span className="status-badge border border-rose-300 bg-rose-100 text-rose-900">
+                          <span className="status-badge border badge-danger-fill">
                             Подозрительный рынок
                           </span>
                         ) : null}
                         {bet.unstableLeague ? (
-                          <span className="status-badge border border-rose-300 bg-rose-100 text-rose-900">
+                          <span className="status-badge border badge-danger-fill">
                             Нестабильная лига
                           </span>
                         ) : null}
@@ -243,17 +274,17 @@ export function BetsTable({
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-4 py-4 align-top font-medium">{formatOdds(bet.odds)}</td>
-                  <td className="px-4 py-4 align-top font-medium">{formatPercent(bet.edgePercent)}</td>
-                  <td className="px-4 py-4 align-top font-medium">{bet.sampleSize}</td>
-                  <td className="px-4 py-4 align-top font-semibold">{formatCurrency(bet.stakeAmount)}</td>
-                  <td className="px-4 py-4 align-top">
+                  <td className="px-3 py-4 align-top font-medium md:px-4">{formatOdds(bet.odds)}</td>
+                  <td className="px-3 py-4 align-top font-medium md:px-4">{formatPercent(bet.edgePercent)}</td>
+                  <td className="px-3 py-4 align-top font-medium md:px-4">{bet.sampleSize}</td>
+                  <td className="px-3 py-4 align-top font-semibold md:px-4">{formatCurrency(bet.stakeAmount)}</td>
+                  <td className="px-3 py-4 align-top md:px-4">
                     <span className={`status-badge border ${resultBadgeStyles[bet.result]}`}>
                       {resultLabels[bet.result]}
                     </span>
                   </td>
                   <td
-                    className={`px-4 py-4 align-top font-semibold ${
+                    className={`px-3 py-4 align-top font-semibold md:px-4 ${
                       bet.profit > 0
                         ? 'text-emerald-700'
                         : bet.profit < 0
@@ -263,15 +294,15 @@ export function BetsTable({
                   >
                     {formatCurrency(bet.profit)}
                   </td>
-                  <td className="px-4 py-4 align-top font-semibold text-slate-950">
+                  <td className="px-3 py-4 align-top font-semibold text-slate-950 md:px-4">
                     {formatCurrency(bet.bankrollAfter)}
                   </td>
                 </tr>
 
                 {quickEditId === bet.id && quickEditDraft ? (
                   <tr className="bg-slate-950/4">
-                    <td className="px-4 py-4" colSpan={11}>
-                      <div className="rounded-[24px] border border-stone-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                    <td className="px-3 py-4 md:px-4" colSpan={11}>
+                      <div className="rounded-[24px] border border-stone-200 bg-white p-4 shadow-none">
                         <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">
@@ -287,8 +318,8 @@ export function BetsTable({
                           </p>
                         </div>
 
-                        <div className="grid gap-3 lg:grid-cols-6">
-                          <label className="field lg:col-span-2">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                          <label className="field sm:col-span-2 lg:col-span-2">
                             <span className="field-label">Событие</span>
                             <input
                               className="field-input"
@@ -298,7 +329,7 @@ export function BetsTable({
                             />
                           </label>
 
-                          <label className="field lg:col-span-2">
+                          <label className="field sm:col-span-2 lg:col-span-2">
                             <span className="field-label">Ставка / рынок</span>
                             <input
                               className="field-input"
@@ -318,9 +349,7 @@ export function BetsTable({
                               min="1.01"
                               step="0.01"
                               value={quickEditDraft.odds}
-                              onChange={(event) =>
-                                updateQuickField('odds', Number(event.target.value) || 0)
-                              }
+                              onChange={(event) => updateQuickField('odds', event.target.value)}
                             />
                           </label>
 
@@ -333,7 +362,7 @@ export function BetsTable({
                               step="0.1"
                               value={quickEditDraft.edgePercent}
                               onChange={(event) =>
-                                updateQuickField('edgePercent', Number(event.target.value) || 0)
+                                updateQuickField('edgePercent', event.target.value)
                               }
                             />
                           </label>
@@ -347,7 +376,7 @@ export function BetsTable({
                               step="1"
                               value={quickEditDraft.sampleSize}
                               onChange={(event) =>
-                                updateQuickField('sampleSize', Number(event.target.value) || 0)
+                                updateQuickField('sampleSize', event.target.value)
                               }
                             />
                           </label>
@@ -370,12 +399,12 @@ export function BetsTable({
                           </label>
                         </div>
 
-                        <div className="mt-4 flex flex-wrap gap-3">
-                          <button className="toolbar-button" type="button" onClick={saveQuickEdit}>
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                          <button className="toolbar-button sm:w-auto" type="button" onClick={saveQuickEdit}>
                             Сохранить быстро
                           </button>
                           <button
-                            className="toolbar-button-secondary"
+                            className="toolbar-button-secondary sm:w-auto"
                             type="button"
                             onClick={closeQuickEdit}
                           >

@@ -22,8 +22,8 @@ export function ConfirmDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[28px] border border-white/60 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <div className="w-full max-w-md rounded-[12px] border border-white/60 bg-white p-6 shadow-none">
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-600">
             Confirm action

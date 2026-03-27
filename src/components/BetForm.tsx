@@ -18,6 +18,51 @@ import {
   resultBadgeStyles,
   resultLabels,
 } from '../utils/format';
+import {
+  getMarketOptions,
+  getMarketSelectionControlValue,
+  MANUAL_MARKET_SELECTION_VALUE,
+} from '../utils/marketOptions';
+
+type BetFormNumericField = 'odds' | 'edgePercent' | 'sampleSize';
+type BetFormState = Omit<BetDraft, BetFormNumericField> & {
+  odds: string;
+  edgePercent: string;
+  sampleSize: string;
+};
+
+function toFormState(draft: BetDraft): BetFormState {
+  return {
+    ...draft,
+    odds: String(draft.odds),
+    edgePercent: String(draft.edgePercent),
+    sampleSize: String(draft.sampleSize),
+  };
+}
+
+function createEmptyFormState() {
+  return toFormState(createEmptyBetDraft());
+}
+
+function parseDraftNumber(value: string, fallback: number) {
+  const normalized = value.trim().replace(',', '.');
+
+  if (normalized === '') {
+    return fallback;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toBetDraft(formState: BetFormState): BetDraft {
+  return {
+    ...formState,
+    odds: parseDraftNumber(formState.odds, 0),
+    edgePercent: parseDraftNumber(formState.edgePercent, 0),
+    sampleSize: Math.max(0, Math.round(parseDraftNumber(formState.sampleSize, 0))),
+  };
+}
 
 interface BetFormProps {
   editingBet: RecalculatedBet | null;
@@ -68,56 +113,109 @@ export function BetForm({
   onSubmit,
   onCancelEdit,
 }: BetFormProps) {
-  const [formState, setFormState] = useState<BetDraft>(createEmptyBetDraft);
+  const [formState, setFormState] = useState<BetFormState>(createEmptyFormState);
+  const [selectionControlValue, setSelectionControlValue] = useState('');
+  const normalizedDraft = toBetDraft(formState);
 
   useEffect(() => {
     if (editingBet) {
-      setFormState(toDraft(editingBet));
+      const nextDraft = toDraft(editingBet);
+      setFormState(toFormState(nextDraft));
+      setSelectionControlValue(
+        getMarketSelectionControlValue(nextDraft.marketType, nextDraft.selection),
+      );
       return;
     }
 
-    setFormState(createEmptyBetDraft());
+    const emptyDraft = createEmptyBetDraft();
+    setFormState(toFormState(emptyDraft));
+    setSelectionControlValue(
+      getMarketSelectionControlValue(emptyDraft.marketType, emptyDraft.selection),
+    );
   }, [editingBet?.id]);
 
-  const preview = calculateStakeAmount(bankrollAtBet, formState);
+  const preview = calculateStakeAmount(bankrollAtBet, normalizedDraft);
   const previewProfit = calculateProfit(
     preview.stakeAmount,
-    formState.odds,
-    formState.result,
+    normalizedDraft.odds,
+    normalizedDraft.result,
     preview.isSkip,
   );
   const previewBankAfter = bankrollAtBet + previewProfit;
   const autoHighRisk = isHighRiskLeague(formState.leagueName);
+  const currentMarketOptions = getMarketOptions(formState.marketType);
+  const isManualSelection = selectionControlValue === MANUAL_MARKET_SELECTION_VALUE;
 
-  function updateField<K extends keyof BetDraft>(field: K, value: BetDraft[K]) {
+  function updateField<K extends keyof BetFormState>(field: K, value: BetFormState[K]) {
     setFormState((current) => ({
       ...current,
       [field]: value,
     }));
   }
 
+  function updateNumericField(field: BetFormNumericField, value: string) {
+    updateField(field, value);
+  }
+
+  function handleMarketTypeChange(nextMarketType: BetDraft['marketType']) {
+    const currentSelection = formState.selection.trim();
+    const nextSelection = getMarketOptions(nextMarketType).includes(currentSelection)
+      ? currentSelection
+      : '';
+
+    setFormState((current) => ({
+      ...current,
+      marketType: nextMarketType,
+      selection: nextSelection,
+    }));
+    setSelectionControlValue(
+      getMarketSelectionControlValue(nextMarketType, nextSelection),
+    );
+  }
+
+  function handleSelectionPresetChange(value: string) {
+    setSelectionControlValue(value);
+
+    if (value === '' || value === MANUAL_MARKET_SELECTION_VALUE) {
+      updateField('selection', '');
+      return;
+    }
+
+    updateField('selection', value);
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!formState.event.trim() || !formState.selection.trim()) {
+    if (
+      !formState.event.trim() ||
+      !formState.selection.trim() ||
+      formState.odds.trim() === '' ||
+      formState.edgePercent.trim() === '' ||
+      formState.sampleSize.trim() === ''
+    ) {
       return;
     }
 
     onSubmit({
-      ...formState,
-      date: formState.date,
+      ...normalizedDraft,
+      date: normalizedDraft.date,
       event: formState.event.trim(),
       selection: formState.selection.trim(),
       leagueName: formState.leagueName.trim(),
     });
 
     if (!editingBet) {
-      setFormState(createEmptyBetDraft());
+      const emptyFormState = createEmptyFormState();
+      setFormState(emptyFormState);
+      setSelectionControlValue(
+        getMarketSelectionControlValue(emptyFormState.marketType, emptyFormState.selection),
+      );
     }
   }
 
   return (
-    <section className="panel p-6">
+    <section className="panel p-4 sm:p-6">
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent">
@@ -142,13 +240,13 @@ export function BetForm({
         </div>
       </div>
 
-      <form className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]" onSubmit={handleSubmit}>
+      <form className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr] xl:gap-6" onSubmit={handleSubmit}>
         <div className="space-y-5">
-          <div className="rounded-[26px] border border-stone-200 bg-stone-50/90 p-5">
+          <div className="rounded-[26px] border border-stone-200 bg-stone-50/90 p-4 sm:p-5">
             <div className="mb-4">
               <h3 className="text-lg font-bold text-slate-950">Матч и контекст</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Базовые поля события, рынка и типа лиги.
+                Сначала выберите тип рынка, затем конкретный вариант или ручной ввод.
               </p>
             </div>
 
@@ -177,16 +275,53 @@ export function BetForm({
               </label>
 
               <label className="field">
-                <span className="field-label">Ставка / рынок</span>
-                <input
+                <span className="field-label">Тип рынка</span>
+                <select
                   className="field-input"
-                  type="text"
-                  required
-                  placeholder="П1, ТБ 2.5, Ф2 (+1.5)"
-                  value={formState.selection}
-                  onChange={(event) => updateField('selection', event.target.value)}
-                />
+                  value={formState.marketType}
+                  onChange={(event) =>
+                    handleMarketTypeChange(event.target.value as BetDraft['marketType'])
+                  }
+                >
+                  {MARKET_TYPES.map((marketType) => (
+                    <option key={marketType} value={marketType}>
+                      {marketTypeLabels[marketType]}
+                    </option>
+                  ))}
+                </select>
               </label>
+
+              <label className="field">
+                <span className="field-label">Конкретная ставка / рынок</span>
+                <select
+                  className="field-input"
+                  required
+                  value={selectionControlValue}
+                  onChange={(event) => handleSelectionPresetChange(event.target.value)}
+                >
+                  <option value="">Выберите вариант</option>
+                  {currentMarketOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                  <option value={MANUAL_MARKET_SELECTION_VALUE}>Ввести вручную</option>
+                </select>
+              </label>
+
+              {isManualSelection ? (
+                <label className="field">
+                  <span className="field-label">Свой вариант ставки</span>
+                  <input
+                    className="field-input"
+                    type="text"
+                    required
+                    placeholder="Введите свой вариант рынка"
+                    value={formState.selection}
+                    onChange={(event) => updateField('selection', event.target.value)}
+                  />
+                </label>
+              ) : null}
 
               <label className="field">
                 <span className="field-label">Название лиги</span>
@@ -197,23 +332,6 @@ export function BetForm({
                   value={formState.leagueName}
                   onChange={(event) => updateField('leagueName', event.target.value)}
                 />
-              </label>
-
-              <label className="field">
-                <span className="field-label">Тип рынка</span>
-                <select
-                  className="field-input"
-                  value={formState.marketType}
-                  onChange={(event) =>
-                    updateField('marketType', event.target.value as BetDraft['marketType'])
-                  }
-                >
-                  {MARKET_TYPES.map((marketType) => (
-                    <option key={marketType} value={marketType}>
-                      {marketTypeLabels[marketType]}
-                    </option>
-                  ))}
-                </select>
               </label>
 
               <label className="field">
@@ -235,7 +353,7 @@ export function BetForm({
             </div>
           </div>
 
-          <div className="rounded-[26px] border border-stone-200 bg-white p-5">
+          <div className="rounded-[26px] border border-stone-200 bg-white p-4 sm:p-5">
             <div className="mb-4">
               <h3 className="text-lg font-bold text-slate-950">Value-параметры</h3>
               <p className="mt-1 text-sm text-slate-500">
@@ -252,8 +370,9 @@ export function BetForm({
                   min="1.01"
                   max="50"
                   step="0.01"
+                  required
                   value={formState.odds}
-                  onChange={(event) => updateField('odds', Number(event.target.value) || 0)}
+                  onChange={(event) => updateNumericField('odds', event.target.value)}
                 />
               </label>
 
@@ -264,10 +383,9 @@ export function BetForm({
                   type="number"
                   min="0"
                   step="0.1"
+                  required
                   value={formState.edgePercent}
-                  onChange={(event) =>
-                    updateField('edgePercent', Number(event.target.value) || 0)
-                  }
+                  onChange={(event) => updateNumericField('edgePercent', event.target.value)}
                 />
               </label>
 
@@ -278,10 +396,9 @@ export function BetForm({
                   type="number"
                   min="0"
                   step="1"
+                  required
                   value={formState.sampleSize}
-                  onChange={(event) =>
-                    updateField('sampleSize', Number(event.target.value) || 0)
-                  }
+                  onChange={(event) => updateNumericField('sampleSize', event.target.value)}
                 />
               </label>
 
@@ -304,7 +421,7 @@ export function BetForm({
             </div>
           </div>
 
-          <div className="rounded-[26px] border border-stone-200 bg-white p-5">
+          <div className="rounded-[26px] border border-stone-200 bg-white p-4 sm:p-5">
             <div className="mb-4">
               <h3 className="text-lg font-bold text-slate-950">Риски и исключения</h3>
               <p className="mt-1 text-sm text-slate-500">
@@ -362,7 +479,7 @@ export function BetForm({
           </div>
         </div>
 
-        <aside className="rounded-[28px] bg-slate-950 p-5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <aside className="rounded-[28px] bg-slate-950 p-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-300">
             Live preview
           </p>
@@ -434,13 +551,13 @@ export function BetForm({
                 : 'Ставка валидна и будет участвовать в стандартном последовательном пересчёте банка.'}
             </div>
 
-            <div className="flex flex-wrap gap-3 pt-1">
-              <button className="toolbar-button" type="submit">
+            <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
+              <button className="toolbar-button sm:w-auto" type="submit">
                 {editingBet ? 'Сохранить изменения' : 'Добавить в журнал'}
               </button>
 
               {editingBet ? (
-                <button className="toolbar-button-secondary" type="button" onClick={onCancelEdit}>
+                <button className="toolbar-button-secondary sm:w-auto" type="button" onClick={onCancelEdit}>
                   Отменить редактирование
                 </button>
               ) : null}

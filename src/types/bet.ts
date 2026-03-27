@@ -1,5 +1,13 @@
 export const BET_RESULTS = ['not_played', 'won', 'lost', 'refund'] as const;
-export const MARKET_TYPES = ['outcomes', 'handicaps', 'totals', 'corners_periods'] as const;
+export const MARKET_TYPES = [
+  'outcomes',
+  'handicaps',
+  'totals',
+  'individual_totals',
+  'individual_handicaps',
+  'corners',
+  'periods',
+] as const;
 export const LEAGUE_TYPES = ['top', 'mid', 'youth_low'] as const;
 export const BET_CLASSIFICATIONS = ['green', 'yellow', 'red', 'skip'] as const;
 

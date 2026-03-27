@@ -17,14 +17,14 @@ function AnalyticsList({
   tone: 'emerald' | 'rose' | 'sky' | 'amber';
 }) {
   const tones = {
-    emerald: 'border-emerald-200 bg-emerald-50/70',
-    rose: 'border-red-200 bg-red-50/70',
-    sky: 'border-sky-200 bg-sky-50/70',
-    amber: 'border-amber-200 bg-amber-50/70',
+    emerald: 'border-emerald-500/25 bg-emerald-500/6',
+    rose: 'border-red-500/25 bg-red-500/6',
+    sky: 'border-sky-500/25 bg-sky-500/6',
+    amber: 'border-amber-500/25 bg-amber-500/6',
   } as const;
 
   return (
-    <section className="panel p-6">
+    <section className="panel p-4 sm:p-6">
       <div className="mb-5 space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent">{title}</p>
         <h3 className="text-2xl font-bold text-ink">{subtitle}</h3>
@@ -32,7 +32,7 @@ function AnalyticsList({
 
       <div className="space-y-3">
         {items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-5 text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 px-4 py-5 text-sm text-slate-500">
             Пока недостаточно сыгранных данных для этого блока.
           </div>
         ) : null}
@@ -44,26 +44,26 @@ function AnalyticsList({
           >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h4 className="text-lg font-bold text-slate-950">{item.label}</h4>
+                <h4 className="text-lg font-semibold text-white">{item.label}</h4>
                 <p className="mt-1 text-sm text-slate-600">
                   Строк: {item.rows} · сыграно: {item.settledRows} · не сыграно: {item.openRows}
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[18rem]">
                 <div>
                   <p className="text-xs uppercase tracking-[0.15em] text-slate-500">P/L</p>
-                  <p className="mt-1 text-sm font-bold text-slate-950">
+                  <p className="mt-1 text-sm font-semibold text-white">
                     {formatCurrency(item.totalProfit)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.15em] text-slate-500">ROI</p>
-                  <p className="mt-1 text-sm font-bold text-slate-950">{item.roi.toFixed(2)}%</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{item.roi.toFixed(2)}%</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Winrate</p>
-                  <p className="mt-1 text-sm font-bold text-slate-950">
+                  <p className="mt-1 text-sm font-semibold text-white">
                     {item.winRate.toFixed(1)}%
                   </p>
                 </div>
