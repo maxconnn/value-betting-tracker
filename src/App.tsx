@@ -438,11 +438,15 @@ export default function App() {
         headerDescription={activeSectionMeta[activeSection].description}
         headerActions={
           <>
-            <span className="stat-pill">
+            <span className="stat-pill hidden md:inline-flex">
               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
               {betsDataSourceLabel}
             </span>
-            <button className="toolbar-button-secondary" type="button" onClick={handleToggleTheme}>
+            <button
+              className="toolbar-button-secondary hidden md:inline-flex"
+              type="button"
+              onClick={handleToggleTheme}
+            >
               {theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
             </button>
           </>
@@ -462,6 +466,13 @@ export default function App() {
             </p>
             <p className="text-sm font-medium text-white">{betsDataSourceLabel}</p>
             <p className="text-xs leading-5 text-slate-400">{betsSyncStatus}</p>
+            <button
+              className="toolbar-button-secondary md:hidden"
+              type="button"
+              onClick={handleToggleTheme}
+            >
+              {theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            </button>
           </div>
         }
       >

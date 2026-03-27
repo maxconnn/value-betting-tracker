@@ -407,7 +407,7 @@ body::after {
   }
 
   .app-header {
-    @apply sticky top-0 z-30 border-b;
+    @apply z-30 border-b md:sticky md:top-0;
     border-color: var(--border-color);
     background-color: var(--header-bg);
   }
@@ -430,6 +430,26 @@ body::after {
     background-color: var(--button-dark-bg-hover);
   }
 
+  .shell-menu-button-icon {
+    width: 40px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .shell-menu-icon {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .shell-menu-icon span {
+    display: block;
+    width: 14px;
+    height: 1.5px;
+    border-radius: 999px;
+    background-color: currentColor;
+  }
+
   .section-stack {
     @apply space-y-6;
   }
@@ -449,7 +469,7 @@ body::after {
   }
 
   .app-header-summary {
-    @apply grid gap-2 sm:flex sm:flex-wrap;
+    @apply hidden gap-2 md:flex md:flex-wrap;
   }
 
 }

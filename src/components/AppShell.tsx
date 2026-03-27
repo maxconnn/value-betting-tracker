@@ -81,18 +81,26 @@ export function AppShell({
           <div className="space-y-4 px-4 py-4 md:space-y-6 md:px-6 lg:px-8">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0 space-y-2">
-                <div className="flex items-center justify-between gap-3 md:block">
+                <div className="flex items-center gap-3 md:hidden">
+                  <button
+                    className="shell-menu-button shell-menu-button-icon"
+                    type="button"
+                    aria-label="Открыть меню разделов"
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                  >
+                    <span aria-hidden="true" className="shell-menu-icon">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                  </button>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
                     Dashboard
                   </p>
-                  <button
-                    className="shell-menu-button md:hidden"
-                    type="button"
-                    onClick={() => setIsMobileSidebarOpen(true)}
-                  >
-                    Разделы
-                  </button>
                 </div>
+                <p className="hidden text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500 md:block">
+                  Dashboard
+                </p>
                 <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
                   {headerTitle}
                 </h2>
@@ -136,11 +144,12 @@ export function AppShell({
                   <p className="mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
                 </div>
                 <button
-                  className="shell-menu-button"
+                  className="shell-menu-button shell-menu-button-icon"
                   type="button"
+                  aria-label="Закрыть меню"
                   onClick={() => setIsMobileSidebarOpen(false)}
                 >
-                  Закрыть
+                  <span aria-hidden="true" className="text-lg leading-none">×</span>
                 </button>
               </div>
             </div>
