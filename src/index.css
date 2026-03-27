@@ -417,7 +417,7 @@ body::after {
   }
 
   .bets-table-scroll {
-    max-height: min(65vh, 32rem);
+    max-height: min(58vh, 32rem);
     overflow-x: auto;
     overflow-y: auto;
     overscroll-behavior-x: contain;
@@ -478,13 +478,14 @@ body::after {
     @apply inline-flex items-center justify-center border px-5 py-3 text-sm font-semibold transition;
     min-height: 44px;
     border-radius: var(--radius-control);
-    border-color: var(--neutral-light-border);
-    background-color: #ffffff;
-    color: #111111;
+    border-color: var(--button-dark-border);
+    background-color: var(--button-dark-bg);
+    color: var(--button-dark-text);
   }
 
   .mobile-drawer-theme-button:hover {
-    background-color: var(--neutral-light-bg);
+    border-color: var(--button-dark-border-hover);
+    background-color: var(--button-dark-bg-hover);
   }
 
   .section-stack {
@@ -575,11 +576,13 @@ body::after {
   display: flex;
   justify-content: flex-start;
   background-color: var(--overlay-bg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mobile-drawer-panel {
   display: flex;
-  height: 100%;
+  min-height: 100%;
   width: min(86vw, 22rem);
   flex-direction: column;
   overflow-y: auto;
@@ -741,6 +744,14 @@ html[data-theme='light'] .dashboard-app .table-action-danger {
 }
 
 @media (max-width: 639px) {
+  .dashboard-app,
+  .app-shell,
+  .app-main {
+    min-height: auto;
+    height: auto;
+    overflow: visible;
+  }
+
   .dashboard-app .toolbar-button,
   .dashboard-app .toolbar-button-secondary {
     width: 100%;
