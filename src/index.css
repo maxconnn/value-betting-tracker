@@ -407,8 +407,7 @@ body::after {
   }
 
   .app-header {
-    @apply border-b;
-    position: static;
+    @apply sticky top-0 z-30 border-b;
     border-color: var(--border-color);
     background-color: var(--header-bg);
   }
