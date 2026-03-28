@@ -18,6 +18,7 @@ interface AppShellProps {
   headerActions?: ReactNode;
   headerSummary?: ReactNode;
   sidebarFooter?: ReactNode;
+  mobileSidebarFooter?: ReactNode;
   children: ReactNode;
 }
 
@@ -32,16 +33,18 @@ export function AppShell({
   headerActions,
   headerSummary,
   sidebarFooter,
+  mobileSidebarFooter,
   children,
 }: AppShellProps) {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!isMobileSidebarOpen) {
       return;
     }
 
-    if (typeof window === 'undefined' || window.innerWidth >= 768) {
+    if (typeof window === 'undefined' || window.innerWidth >= 1024) {
       return;
     }
 
@@ -63,17 +66,33 @@ export function AppShell({
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isDesktopSidebarCollapsed ? 'app-shell-sidebar-collapsed' : ''}`}>
       <aside className="app-sidebar">
-        <div className="border-b border-slate-800 px-5 py-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            Operations
-          </p>
-          <h1 className="mt-3 text-xl font-semibold text-white">{appTitle}</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
+        <div className="desktop-sidebar-rail-header border-b border-slate-800 px-5 py-5">
+          <button
+            className="shell-menu-button shell-menu-button-icon desktop-sidebar-toggle"
+            type="button"
+            aria-label={isDesktopSidebarCollapsed ? 'Показать боковое меню' : 'Скрыть боковое меню'}
+            aria-pressed={isDesktopSidebarCollapsed}
+            onClick={() => setIsDesktopSidebarCollapsed((value) => !value)}
+          >
+            <span aria-hidden="true" className="shell-menu-icon">
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
+
+          <div className="desktop-sidebar-brand">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+              Operations
+            </p>
+            <h1 className="mt-3 text-xl font-semibold text-white">{appTitle}</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-2 px-3 py-4">
+        <nav className="desktop-sidebar-nav flex-1 space-y-2 px-3 py-4">
           {sections.map((section) => {
             const isActive = section.id === activeSection;
 
@@ -94,44 +113,49 @@ export function AppShell({
           })}
         </nav>
 
-        {sidebarFooter ? <div className="border-t border-slate-800 px-4 py-4">{sidebarFooter}</div> : null}
+        {sidebarFooter ? (
+          <div className="desktop-sidebar-footer border-t border-slate-800 px-4 py-4">{sidebarFooter}</div>
+        ) : null}
       </aside>
 
       <div className="app-main">
         <header className="app-header">
-          <div className="space-y-4 px-4 py-4 md:space-y-6 md:px-6 lg:px-8">
+          <div className="mobile-topbar lg:hidden">
+            <div className="flex items-center gap-3">
+              <button
+                className="shell-menu-button shell-menu-button-icon"
+                type="button"
+                aria-label="Открыть меню разделов"
+                onClick={() => setIsMobileSidebarOpen(true)}
+              >
+                <span aria-hidden="true" className="shell-menu-icon">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </button>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
+                Dashboard
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden space-y-6 px-8 py-4 lg:block">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0 space-y-2">
-                <div className="flex items-center gap-3 md:hidden">
-                  <button
-                    className="shell-menu-button shell-menu-button-icon"
-                    type="button"
-                    aria-label="Открыть меню разделов"
-                    onClick={() => setIsMobileSidebarOpen(true)}
-                  >
-                    <span aria-hidden="true" className="shell-menu-icon">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                  </button>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
-                    Dashboard
-                  </p>
-                </div>
-                <p className="hidden text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500 md:block">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
                   Dashboard
                 </p>
-                <h2 className="hidden text-2xl font-semibold tracking-tight text-white md:block md:text-3xl">
+                <h2 className="text-2xl font-semibold tracking-tight text-white lg:text-3xl">
                   {headerTitle}
                 </h2>
-                <p className="hidden max-w-3xl text-sm leading-6 text-slate-400 md:block">
+                <p className="max-w-3xl text-sm leading-6 text-slate-400">
                   {headerDescription}
                 </p>
               </div>
 
               {headerActions ? (
-                <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+                <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:flex xl:w-auto xl:justify-end">
                   {headerActions}
                 </div>
               ) : null}
@@ -146,7 +170,7 @@ export function AppShell({
 
       {isMobileSidebarOpen ? (
         <div
-          className="mobile-drawer-overlay md:hidden"
+          className="mobile-drawer-overlay lg:hidden"
           role="presentation"
           onClick={() => setIsMobileSidebarOpen(false)}
         >
@@ -157,14 +181,14 @@ export function AppShell({
             aria-label="Навигация по разделам"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-slate-800 px-4 py-4">
+            <div className="mobile-drawer-header border-b border-slate-800 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                     Operations
                   </p>
                   <h1 className="mt-2 text-lg font-semibold text-white">{appTitle}</h1>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
+                  <p className="mobile-drawer-subtitle mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
                 </div>
                 <button
                   className="shell-menu-button shell-menu-button-icon"
@@ -198,7 +222,11 @@ export function AppShell({
               })}
             </nav>
 
-            {sidebarFooter ? <div className="border-t border-slate-800 px-4 py-4">{sidebarFooter}</div> : null}
+            {mobileSidebarFooter || sidebarFooter ? (
+              <div className="mobile-drawer-footer border-t border-slate-800 px-4 py-4">
+                {mobileSidebarFooter ?? sidebarFooter}
+              </div>
+            ) : null}
           </aside>
         </div>
       ) : null}

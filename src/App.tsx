@@ -441,12 +441,12 @@ export default function App() {
         headerDescription={activeSectionMeta[activeSection].description}
         headerActions={
           <>
-            <span className="stat-pill hidden md:inline-flex">
+            <span className="stat-pill hidden lg:inline-flex">
               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
               {betsDataSourceLabel}
             </span>
             <button
-              className={`${themeToggleButtonClass} hidden md:inline-flex`}
+              className={`${themeToggleButtonClass} hidden lg:inline-flex`}
               type="button"
               onClick={handleToggleTheme}
             >
@@ -470,7 +470,25 @@ export default function App() {
             <p className="text-sm font-medium text-white">{betsDataSourceLabel}</p>
             <p className="text-xs leading-5 text-slate-400">{betsSyncStatus}</p>
             <button
-              className={`${themeToggleButtonClass} md:hidden`}
+              className={`${themeToggleButtonClass} lg:hidden`}
+              type="button"
+              onClick={handleToggleTheme}
+            >
+              {theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            </button>
+          </div>
+        }
+        mobileSidebarFooter={
+          <div className="mobile-drawer-meta space-y-3">
+            <div className="mobile-drawer-meta-block space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Data source
+              </p>
+              <p className="text-sm font-medium text-white">{betsDataSourceLabel}</p>
+            </div>
+            <p className="mobile-drawer-sync text-xs leading-5 text-slate-400">{betsSyncStatus}</p>
+            <button
+              className={`${themeToggleButtonClass} lg:hidden`}
               type="button"
               onClick={handleToggleTheme}
             >
