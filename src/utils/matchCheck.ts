@@ -1,13 +1,13 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite';
-import react from '@vitejs/plugin-react';
+import type {
+  MatchCheckDisplayStatus,
+  MatchCheckRequest,
+  MatchCheckResponse,
+  MatchCheckStatus,
+} from '../types/matchCheck';
 
-type MatchCheckStatus = 'not_started' | 'live' | 'finished' | 'not_found';
-
-interface MatchCheckRequest {
-  sport?: unknown;
-  date?: unknown;
-  time?: unknown;
-  event?: unknown;
+interface MatchCheckEnvironment {
+  sportsApiKey?: string;
+  sportsApiFootballBaseUrl?: string;
 }
 
 interface FootballFixtureEntry {
@@ -60,6 +60,22 @@ const TEAM_TOKEN_ALIASES: Record<string, string> = {
   untd: 'united',
 };
 
+export const matchCheckStatusLabels: Record<MatchCheckDisplayStatus, string> = {
+  checking: 'Проверяем',
+  not_started: 'Не началось',
+  live: 'В лайве',
+  finished: 'Завершено',
+  not_found: 'Не найдено',
+};
+
+export const matchCheckStatusBadgeStyles: Record<MatchCheckDisplayStatus, string> = {
+  checking: 'badge-neutral',
+  not_started: 'badge-info-light',
+  live: 'badge-warning-light',
+  finished: 'badge-success-light',
+  not_found: 'badge-neutral',
+};
+
 function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -81,40 +97,6 @@ function normalizeComparableText(value: string) {
 function normalizeTimeValue(value: string) {
   const normalized = value.trim();
   return /^\d{2}:\d{2}$/.test(normalized) ? normalized : '';
-}
-
-function normalizeEventName(value: string) {
-  return normalizeWhitespace(
-    value
-      .replace(/\s*[–—]\s*/g, ' - ')
-      .replace(/\s+-\s+/g, ' - '),
-  );
-}
-
-function splitEventTeams(value: string) {
-  const normalized = normalizeEventName(value);
-  const strictParts = normalized
-    .split(' - ')
-    .map((part) => normalizeWhitespace(part))
-    .filter(Boolean);
-
-  if (strictParts.length === 2) {
-    return [strictParts[0], strictParts[1]] as const;
-  }
-
-  const hyphenCount = (normalized.match(/-/g) ?? []).length;
-  if (hyphenCount === 1) {
-    const looseParts = normalized
-      .split('-')
-      .map((part) => normalizeWhitespace(part))
-      .filter(Boolean);
-
-    if (looseParts.length === 2) {
-      return [looseParts[0], looseParts[1]] as const;
-    }
-  }
-
-  return null;
 }
 
 function normalizeTeamToken(token: string) {
@@ -168,10 +150,7 @@ function getFixtureTimeValue(fixture: FootballFixtureEntry) {
   return value.length >= 16 ? value.slice(11, 16) : '';
 }
 
-function getFixtureMatchScore(
-  request: { time: string; event: string },
-  fixture: FootballFixtureEntry,
-) {
+function getFixtureMatchScore(request: MatchCheckRequest, fixture: FootballFixtureEntry) {
   const teams = splitEventTeams(request.event);
   const fixtureTeams = getFixtureTeams(fixture);
 
@@ -209,7 +188,7 @@ function getFixtureMatchScore(
 }
 
 function findBestFixtureMatch(
-  request: { time: string; event: string },
+  request: MatchCheckRequest,
   fixtures: FootballFixtureEntry[],
 ): FootballFixtureEntry | null {
   let bestMatch: FootballFixtureEntry | null = null;
@@ -239,11 +218,56 @@ function buildFootballFixturesUrl(baseUrl: string, date: string) {
   return url.toString();
 }
 
-function isFootballSport(value: string) {
+export function isFootballSport(value: string) {
   return FOOTBALL_SPORT_ALIASES.has(normalizeComparableText(value));
 }
 
-function mapFootballApiStatus(shortStatus: string | null | undefined): MatchCheckStatus {
+export function normalizeEventName(value: string) {
+  return normalizeWhitespace(
+    value
+      .replace(/\s*[–—]\s*/g, ' - ')
+      .replace(/\s+-\s+/g, ' - '),
+  );
+}
+
+export function splitEventTeams(value: string) {
+  const normalized = normalizeEventName(value);
+  const strictParts = normalized
+    .split(' - ')
+    .map((part) => normalizeWhitespace(part))
+    .filter(Boolean);
+
+  if (strictParts.length === 2) {
+    return [strictParts[0], strictParts[1]] as const;
+  }
+
+  const hyphenCount = (normalized.match(/-/g) ?? []).length;
+  if (hyphenCount === 1) {
+    const looseParts = normalized
+      .split('-')
+      .map((part) => normalizeWhitespace(part))
+      .filter(Boolean);
+
+    if (looseParts.length === 2) {
+      return [looseParts[0], looseParts[1]] as const;
+    }
+  }
+
+  return null;
+}
+
+export function getMatchCheckRequestKey(
+  request: Pick<MatchCheckRequest, 'sport' | 'date' | 'time' | 'event'>,
+) {
+  return [
+    normalizeComparableText(request.sport),
+    request.date.trim(),
+    normalizeTimeValue(request.time),
+    normalizeEventName(request.event),
+  ].join('::');
+}
+
+export function mapFootballApiStatus(shortStatus: string | null | undefined): MatchCheckStatus {
   const normalized = normalizeWhitespace(shortStatus ?? '').toUpperCase();
 
   if (NOT_STARTED_API_STATUSES.has(normalized)) {
@@ -261,15 +285,12 @@ function mapFootballApiStatus(shortStatus: string | null | undefined): MatchChec
   return 'not_found';
 }
 
-async function checkFootballMatchStatus(
-  request: MatchCheckRequest | null | undefined,
-  env: {
-    sportsApiKey?: string;
-    sportsApiFootballBaseUrl?: string;
-  },
+export async function checkFootballMatchStatus(
+  request: Partial<MatchCheckRequest> | null | undefined,
+  env: MatchCheckEnvironment,
   fetchImpl: typeof fetch = fetch,
-) {
-  const normalizedRequest = {
+): Promise<MatchCheckResponse> {
+  const normalizedRequest: MatchCheckRequest = {
     sport: typeof request?.sport === 'string' ? request.sport.trim() : '',
     date: typeof request?.date === 'string' ? request.date.trim() : '',
     time: typeof request?.time === 'string' ? normalizeTimeValue(request.time) : '',
@@ -281,7 +302,7 @@ async function checkFootballMatchStatus(
     normalizedRequest.date === '' ||
     normalizedRequest.event === ''
   ) {
-    return { status: 'not_found' as const };
+    return { status: 'not_found' };
   }
 
   if (!env.sportsApiKey || !env.sportsApiFootballBaseUrl) {
@@ -304,7 +325,7 @@ async function checkFootballMatchStatus(
   const matchedFixture = findBestFixtureMatch(normalizedRequest, fixtures);
 
   if (!matchedFixture) {
-    return { status: 'not_found' as const };
+    return { status: 'not_found' };
   }
 
   const matchedEvent = getFixtureEventLabel(matchedFixture);
@@ -317,87 +338,3 @@ async function checkFootballMatchStatus(
     matchedEvent: matchedEvent || undefined,
   };
 }
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message.trim();
-  }
-
-  return 'Не удалось проверить матч через локальный server route.';
-}
-
-function sendJson(
-  response: {
-    statusCode: number;
-    setHeader: (name: string, value: string) => void;
-    end: (chunk?: string) => void;
-  },
-  statusCode: number,
-  payload: unknown,
-) {
-  response.statusCode = statusCode;
-  response.setHeader('Content-Type', 'application/json');
-  response.end(JSON.stringify(payload));
-}
-
-function readJsonBody(request: {
-  on: (event: string, listener: (chunk?: unknown) => void) => void;
-}) {
-  return new Promise<unknown>((resolve, reject) => {
-    let rawBody = '';
-
-    request.on('data', (chunk) => {
-      rawBody += String(chunk ?? '');
-    });
-    request.on('end', () => {
-      if (rawBody.trim() === '') {
-        resolve({});
-        return;
-      }
-
-      try {
-        resolve(JSON.parse(rawBody));
-      } catch {
-        reject(new Error('Некорректный JSON body.'));
-      }
-    });
-    request.on('error', () => {
-      reject(new Error('Не удалось прочитать тело запроса.'));
-    });
-  });
-}
-
-function footballMatchRoutePlugin(mode: string): Plugin {
-  const env = loadEnv(mode, process.cwd(), '');
-
-  return {
-    name: 'football-match-route',
-    configureServer(server) {
-      server.middlewares.use('/api/check-football-match', async (request, response) => {
-        if (request.method !== 'POST') {
-          sendJson(response, 405, { message: 'Method not allowed.' });
-          return;
-        }
-
-        try {
-          const body = await readJsonBody(request);
-          const result = await checkFootballMatchStatus(body as MatchCheckRequest, {
-            sportsApiKey: env.SPORTS_API_KEY,
-            sportsApiFootballBaseUrl: env.SPORTS_API_FOOTBALL_BASE_URL,
-          });
-
-          sendJson(response, 200, result);
-        } catch (error) {
-          const message = getErrorMessage(error);
-          const statusCode = message === 'Некорректный JSON body.' ? 400 : 500;
-
-          sendJson(response, statusCode, { message });
-        }
-      });
-    },
-  };
-}
-
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), footballMatchRoutePlugin(mode)],
-}));

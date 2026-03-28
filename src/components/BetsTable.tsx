@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { BET_RESULTS, type BetDraft, type RecalculatedBet } from '../types/bet';
+import type { BetMatchCheckState } from '../types/matchCheck';
 import {
   classificationBadgeStyles,
   classificationLabels,
@@ -12,13 +13,21 @@ import {
   resultBadgeStyles,
   resultLabels,
 } from '../utils/format';
+import {
+  matchCheckStatusBadgeStyles,
+  matchCheckStatusLabels,
+} from '../utils/matchCheck';
 
 interface BetsTableProps {
   bets: RecalculatedBet[];
   totalRows: number;
   hasActiveFilters: boolean;
   editingBetId: string | null;
+  checkableMatchesCount: number;
+  isCheckingMatches: boolean;
+  matchChecksByBetId: Record<string, BetMatchCheckState>;
   onEdit: (id: string) => void;
+  onCheckMatches: () => void;
   onQuickSave: (id: string, draft: BetDraft) => void;
   onDelete: (id: string) => void;
 }
@@ -89,7 +98,11 @@ export function BetsTable({
   totalRows,
   hasActiveFilters,
   editingBetId,
+  checkableMatchesCount,
+  isCheckingMatches,
+  matchChecksByBetId,
   onEdit,
+  onCheckMatches,
   onQuickSave,
   onDelete,
 }: BetsTableProps) {
@@ -159,6 +172,18 @@ export function BetsTable({
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button
+              className="toolbar-button-secondary"
+              type="button"
+              onClick={onCheckMatches}
+              disabled={isCheckingMatches || checkableMatchesCount === 0}
+            >
+              {isCheckingMatches
+                ? 'Проверяем матчи...'
+                : checkableMatchesCount > 0
+                  ? `Проверить матчи (${checkableMatchesCount})`
+                  : 'Проверить матчи'}
+            </button>
             <div className="rounded-full border border-stone-200 bg-stone-50 px-4 py-2 text-sm font-medium text-slate-700">
               В таблице {bets.length} из {totalRows} строк
             </div>
@@ -207,13 +232,16 @@ export function BetsTable({
               </tr>
             ) : null}
 
-            {bets.map((bet) => (
-              <Fragment key={bet.id}>
-                <tr
-                  className={`border-b border-stone-200/80 align-top ${
-                    editingBetId === bet.id ? 'ring-2 ring-inset ring-accent/40' : ''
-                  }`}
-                >
+            {bets.map((bet) => {
+              const matchCheck = matchChecksByBetId[bet.id];
+
+              return (
+                <Fragment key={bet.id}>
+                  <tr
+                    className={`border-b border-stone-200/80 align-top ${
+                      editingBetId === bet.id ? 'ring-2 ring-inset ring-accent/40' : ''
+                    }`}
+                  >
                   <td className="px-3 py-4 align-top font-semibold text-slate-700 md:px-4">{bet.index}</td>
                   <td className="px-3 py-4 align-top whitespace-nowrap md:px-4">
                     <div className="space-y-1">
@@ -247,6 +275,16 @@ export function BetsTable({
                           </span>
                         ) : null}
                       </div>
+
+                      {matchCheck ? (
+                        <div className="flex flex-wrap gap-2">
+                          <span
+                            className={`status-badge border ${matchCheckStatusBadgeStyles[matchCheck.status]}`}
+                          >
+                            Матч: {matchCheckStatusLabels[matchCheck.status]}
+                          </span>
+                        </div>
+                      ) : null}
 
                       <div className="flex flex-wrap gap-2">
                         <button className="table-action" type="button" onClick={() => onEdit(bet.id)}>
@@ -324,12 +362,12 @@ export function BetsTable({
                   <td className="px-3 py-4 align-top font-semibold text-slate-950 md:px-4">
                     {formatCurrency(bet.bankrollAfter)}
                   </td>
-                </tr>
+                  </tr>
 
-                {quickEditId === bet.id && quickEditDraft ? (
-                  <tr className="bg-slate-950/4">
-                    <td className="px-3 py-4 md:px-4" colSpan={11}>
-                      <div className="rounded-[24px] border border-stone-200 bg-white p-4 shadow-none">
+                  {quickEditId === bet.id && quickEditDraft ? (
+                    <tr className="bg-slate-950/4">
+                      <td className="px-3 py-4 md:px-4" colSpan={11}>
+                        <div className="rounded-[24px] border border-stone-200 bg-white p-4 shadow-none">
                         <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">
@@ -495,12 +533,13 @@ export function BetsTable({
                             Отмена
                           </button>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                ) : null}
-              </Fragment>
-            ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

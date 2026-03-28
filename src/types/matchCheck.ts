@@ -1,0 +1,24 @@
+export const MATCH_CHECK_STATUSES = ['not_started', 'live', 'finished', 'not_found'] as const;
+export const MATCH_CHECK_DISPLAY_STATUSES = [...MATCH_CHECK_STATUSES, 'checking'] as const;
+
+export type MatchCheckStatus = (typeof MATCH_CHECK_STATUSES)[number];
+export type MatchCheckDisplayStatus = (typeof MATCH_CHECK_DISPLAY_STATUSES)[number];
+
+export interface MatchCheckRequest {
+  sport: string;
+  date: string;
+  time: string;
+  event: string;
+}
+
+export interface MatchCheckResponse {
+  status: MatchCheckStatus;
+  fixtureId?: number;
+  apiStatus?: string;
+  matchedEvent?: string;
+}
+
+export interface BetMatchCheckState {
+  status: MatchCheckDisplayStatus;
+  requestKey: string;
+}

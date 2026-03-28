@@ -13,10 +13,12 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { fetchBetsFromSupabase, syncBetsToSupabase } from './lib/betsRepository';
 import { isSupabaseConfigured } from './lib/supabase';
 import type { BetDraft, BetEntry, JournalFilters, ThemeMode } from './types/bet';
+import type { BetMatchCheckState, MatchCheckRequest, MatchCheckResponse } from './types/matchCheck';
 import { buildBettingAnalytics } from './utils/analytics';
 import { getBetStatsSummary, recalculateBankroll } from './utils/betting';
 import { downloadCsvFile, exportBetsToCsv, importBetsFromCsv } from './utils/csv';
 import { formatCurrency } from './utils/format';
+import { getMatchCheckRequestKey, isFootballSport } from './utils/matchCheck';
 import {
   DEFAULT_INITIAL_BANK,
   STORAGE_KEYS,
@@ -54,6 +56,29 @@ function getErrorMessage(error: unknown) {
   return 'Unknown Supabase error';
 }
 
+function hasEqualMatchCheckStateMap(
+  left: Record<string, BetMatchCheckState>,
+  right: Record<string, BetMatchCheckState>,
+) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every((key) => {
+    const leftValue = left[key];
+    const rightValue = right[key];
+
+    return (
+      rightValue !== undefined &&
+      leftValue.status === rightValue.status &&
+      leftValue.requestKey === rightValue.requestKey
+    );
+  });
+}
+
 export default function App() {
   const [initialBank, setInitialBank] = useLocalStorage<number>(
     STORAGE_KEYS.initialBank,
@@ -73,6 +98,7 @@ export default function App() {
   });
   const [isLoadingRemoteBets, setIsLoadingRemoteBets] = useState(isSupabaseConfigured);
   const [isSyncingRemoteBets, setIsSyncingRemoteBets] = useState(false);
+  const [remoteSyncError, setRemoteSyncError] = useState<string | null>(null);
   const [betsDataSource, setBetsDataSource] = useState<'supabase' | 'local_backup'>(
     isSupabaseConfigured ? 'supabase' : 'local_backup',
   );
@@ -87,7 +113,12 @@ export default function App() {
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(
     null,
   );
+  const [matchChecksByBetId, setMatchChecksByBetId] = useState<Record<string, BetMatchCheckState>>(
+    {},
+  );
+  const [isCheckingMatches, setIsCheckingMatches] = useState(false);
   const hasHydratedSupabaseRef = useRef(false);
+  const remoteSyncErrorRef = useRef<string | null>(null);
 
   const recalculatedBets = recalculateBankroll(initialBank, bets);
   const stats = getBetStatsSummary(recalculatedBets, initialBank);
@@ -120,6 +151,11 @@ export default function App() {
       return true;
     });
   }, [filters, recalculatedBets]);
+  const checkableFootballBets = useMemo(
+    () =>
+      recalculatedBets.filter((bet) => bet.result === 'not_played' && isFootballSport(bet.sport)),
+    [recalculatedBets],
+  );
 
   const hasActiveFilters =
     filters.search.trim() !== '' || filters.result !== 'all' || filters.classification !== 'all';
@@ -129,9 +165,11 @@ export default function App() {
     ? 'Загружаем журнал из общей базы.'
     : isSyncingRemoteBets
       ? 'Изменения ставок синхронизируются с Supabase.'
-      : betsDataSource === 'supabase'
-        ? 'Ставки читаются и записываются в общую базу.'
-        : 'При недоступности Supabase журнал продолжает работать локально.';
+      : betsDataSource === 'local_backup'
+        ? 'При недоступности Supabase журнал продолжает работать локально.'
+      : remoteSyncError
+        ? 'Последняя синхронизация с Supabase завершилась ошибкой. Изменения в общей базе не подтверждены.'
+        : 'Ставки читаются и записываются в общую базу.';
 
   const dashboardSections: AppShellSection[] = [
     {
@@ -187,11 +225,16 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    remoteSyncErrorRef.current = remoteSyncError;
+  }, [remoteSyncError]);
+
+  useEffect(() => {
     let isCancelled = false;
 
     async function hydrateBets() {
       if (!isSupabaseConfigured) {
         setBetsDataSource('local_backup');
+        setRemoteSyncError(null);
         setIsLoadingRemoteBets(false);
         setNotice({
           tone: 'info',
@@ -211,6 +254,7 @@ export default function App() {
           setBets(remoteBets);
           setLocalBackupBets(remoteBets);
           setBetsDataSource('supabase');
+          setRemoteSyncError(null);
           hasHydratedSupabaseRef.current = true;
           return;
         }
@@ -227,6 +271,7 @@ export default function App() {
           setBets(syncedSeedBets);
           setLocalBackupBets(syncedSeedBets);
           setBetsDataSource('supabase');
+          setRemoteSyncError(null);
           hasHydratedSupabaseRef.current = true;
           setNotice({
             tone: 'info',
@@ -238,6 +283,7 @@ export default function App() {
         setBets(seedBets);
         setLocalBackupBets(seedBets);
         setBetsDataSource('supabase');
+        setRemoteSyncError(null);
         hasHydratedSupabaseRef.current = true;
         setNotice({
           tone: 'info',
@@ -251,6 +297,7 @@ export default function App() {
         }
 
         setBetsDataSource('local_backup');
+        setRemoteSyncError(getErrorMessage(error));
         setBets(localBackupBets);
         setNotice({
           tone: 'error',
@@ -271,8 +318,33 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isSupabaseConfigured && betsDataSource === 'supabase') {
+      return;
+    }
+
     setLocalBackupBets(bets);
-  }, [bets, setLocalBackupBets]);
+  }, [bets, betsDataSource, setLocalBackupBets]);
+
+  useEffect(() => {
+    setMatchChecksByBetId((current) => {
+      const next: Record<string, BetMatchCheckState> = {};
+
+      bets.forEach((bet) => {
+        if (bet.result !== 'not_played' || !isFootballSport(bet.sport)) {
+          return;
+        }
+
+        const existingState = current[bet.id];
+        const requestKey = getMatchCheckRequestKey(bet);
+
+        if (existingState && existingState.requestKey === requestKey) {
+          next[bet.id] = existingState;
+        }
+      });
+
+      return hasEqualMatchCheckStateMap(current, next) ? current : next;
+    });
+  }, [bets]);
 
   useEffect(() => {
     if (!hasHydratedSupabaseRef.current || betsDataSource !== 'supabase') {
@@ -291,6 +363,14 @@ export default function App() {
           return;
         }
 
+        if (remoteSyncErrorRef.current) {
+          setNotice({
+            tone: 'success',
+            text: 'Синхронизация с Supabase восстановлена. Последние изменения подтверждены в общей базе.',
+          });
+        }
+
+        setRemoteSyncError(null);
         setLocalBackupBets(syncedBets);
         const betsChanged =
           syncedBets.length !== bets.length ||
@@ -306,10 +386,10 @@ export default function App() {
           return;
         }
 
-        setBetsDataSource('local_backup');
+        setRemoteSyncError(getErrorMessage(error));
         setNotice({
           tone: 'error',
-          text: `Не удалось синхронизировать изменения с Supabase: ${getErrorMessage(error)}. Данные сохранены только локально.`,
+          text: `Не удалось синхронизировать изменения с Supabase: ${getErrorMessage(error)}. Изменения не подтверждены в общей базе.`,
         });
       } finally {
         if (!isCancelled) {
@@ -325,23 +405,40 @@ export default function App() {
     };
   }, [bets, betsDataSource, initialBank, setLocalBackupBets]);
 
+  const usesSharedSupabase = isSupabaseConfigured && betsDataSource === 'supabase';
+
   function handleSaveBet(draft: BetDraft) {
     if (editingBetId) {
       setBets((current) =>
         current.map((bet) => (bet.id === editingBetId ? { ...draft, id: editingBetId } : bet)),
       );
       setEditingBetId(null);
-      setNotice({ tone: 'success', text: 'Ставка обновлена без создания дубля.' });
+      setNotice({
+        tone: usesSharedSupabase ? 'info' : 'success',
+        text: usesSharedSupabase
+          ? 'Ставка обновлена локально без создания дубля. Ждём подтверждения от Supabase.'
+          : 'Ставка обновлена без создания дубля.',
+      });
       return;
     }
 
     setBets((current) => [...current, { ...draft, id: createBetId() }]);
-    setNotice({ tone: 'success', text: 'Новая ставка добавлена в журнал.' });
+    setNotice({
+      tone: usesSharedSupabase ? 'info' : 'success',
+      text: usesSharedSupabase
+        ? 'Новая ставка добавлена в журнал. Ждём подтверждения от Supabase.'
+        : 'Новая ставка добавлена в журнал.',
+    });
   }
 
   function handleQuickSaveBet(id: string, draft: BetDraft) {
     setBets((current) => current.map((bet) => (bet.id === id ? { ...draft, id } : bet)));
-    setNotice({ tone: 'success', text: 'Строка обновлена в быстром режиме.' });
+    setNotice({
+      tone: usesSharedSupabase ? 'info' : 'success',
+      text: usesSharedSupabase
+        ? 'Строка обновлена локально. Ждём подтверждения от Supabase.'
+        : 'Строка обновлена в быстром режиме.',
+    });
   }
 
   function handleDeleteBet(id: string) {
@@ -362,7 +459,12 @@ export default function App() {
 
     handleDeleteBet(pendingDeleteId);
     setPendingDeleteId(null);
-    setNotice({ tone: 'success', text: 'Строка удалена, нумерация и банк пересчитаны.' });
+    setNotice({
+      tone: usesSharedSupabase ? 'info' : 'success',
+      text: usesSharedSupabase
+        ? 'Строка удалена локально, нумерация и банк пересчитаны. Ждём подтверждения от Supabase.'
+        : 'Строка удалена, нумерация и банк пересчитаны.',
+    });
   }
 
   function handleExportCsv() {
@@ -424,6 +526,149 @@ export default function App() {
 
   function handleToggleTheme() {
     setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
+  }
+
+  async function handleCheckMatches() {
+    if (isCheckingMatches || checkableFootballBets.length === 0) {
+      return;
+    }
+
+    const groupedRequests = new Map<
+      string,
+      {
+        betIds: string[];
+        request: MatchCheckRequest;
+      }
+    >();
+
+    checkableFootballBets.forEach((bet) => {
+      const requestKey = getMatchCheckRequestKey(bet);
+      const existingGroup = groupedRequests.get(requestKey);
+
+      if (existingGroup) {
+        existingGroup.betIds.push(bet.id);
+        return;
+      }
+
+      groupedRequests.set(requestKey, {
+        betIds: [bet.id],
+        request: {
+          sport: bet.sport,
+          date: bet.date,
+          time: bet.time,
+          event: bet.event,
+        },
+      });
+    });
+
+    const previousStates = new Map<string, BetMatchCheckState | undefined>();
+    checkableFootballBets.forEach((bet) => {
+      previousStates.set(bet.id, matchChecksByBetId[bet.id]);
+    });
+
+    setIsCheckingMatches(true);
+    setMatchChecksByBetId((current) => {
+      const next = { ...current };
+
+      checkableFootballBets.forEach((bet) => {
+        next[bet.id] = {
+          status: 'checking',
+          requestKey: getMatchCheckRequestKey(bet),
+        };
+      });
+
+      return next;
+    });
+
+    let successfulChecks = 0;
+    let failedChecks = 0;
+    let firstErrorMessage = '';
+
+    try {
+      for (const [requestKey, requestGroup] of groupedRequests.entries()) {
+        try {
+          const response = await fetch('/api/check-football-match', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestGroup.request),
+          });
+
+          if (!response.ok) {
+            const errorPayload = (await response.json().catch(() => null)) as
+              | { message?: string }
+              | null;
+
+            throw new Error(errorPayload?.message ?? `HTTP ${response.status}`);
+          }
+
+          const payload = (await response.json()) as MatchCheckResponse;
+
+          setMatchChecksByBetId((current) => {
+            const next = { ...current };
+
+            requestGroup.betIds.forEach((betId) => {
+              next[betId] = {
+                status: payload.status,
+                requestKey,
+              };
+            });
+
+            return next;
+          });
+
+          successfulChecks += 1;
+        } catch (error) {
+          failedChecks += 1;
+          firstErrorMessage =
+            firstErrorMessage ||
+            (error instanceof Error && error.message.trim()
+              ? error.message.trim()
+              : 'Неизвестная ошибка проверки матчей.');
+
+          setMatchChecksByBetId((current) => {
+            const next = { ...current };
+
+            requestGroup.betIds.forEach((betId) => {
+              const previousState = previousStates.get(betId);
+
+              if (previousState) {
+                next[betId] = previousState;
+                return;
+              }
+
+              delete next[betId];
+            });
+
+            return next;
+          });
+        }
+      }
+    } finally {
+      setIsCheckingMatches(false);
+    }
+
+    if (failedChecks === 0) {
+      setNotice({
+        tone: 'info',
+        text: `Проверено ${successfulChecks} футбольных матчей по открытым строкам журнала.`,
+      });
+      return;
+    }
+
+    if (successfulChecks > 0) {
+      setNotice({
+        tone: 'error',
+        text: `Часть матчей проверена, но ${failedChecks} запросов завершились ошибкой: ${firstErrorMessage}`,
+      });
+      return;
+    }
+
+    setNotice({
+      tone: 'error',
+      text: `Не удалось проверить статусы матчей: ${firstErrorMessage}`,
+    });
   }
 
   const themeToggleButtonClass =
@@ -521,7 +766,11 @@ export default function App() {
               totalRows={recalculatedBets.length}
               hasActiveFilters={hasActiveFilters}
               editingBetId={editingBetId}
+              checkableMatchesCount={checkableFootballBets.length}
+              isCheckingMatches={isCheckingMatches}
+              matchChecksByBetId={matchChecksByBetId}
               onEdit={(id) => setEditingBetId(id)}
+              onCheckMatches={handleCheckMatches}
               onQuickSave={handleQuickSaveBet}
               onDelete={handleRequestDelete}
             />
