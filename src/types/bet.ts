@@ -21,10 +21,14 @@ export type ThemeMode = 'light' | 'dark';
 
 export interface BetEntry {
   id: string;
+  bookmaker: string;
+  sport: string;
   date: string;
+  time: string;
   event: string;
   selection: string;
   odds: number;
+  probability: number;
   edgePercent: number;
   sampleSize: number;
   marketType: MarketType;
@@ -115,10 +119,14 @@ export function getTodayDateString() {
 
 export function createEmptyBetDraft(): BetDraft {
   return {
+    bookmaker: '',
+    sport: '',
     date: getTodayDateString(),
+    time: '',
     event: '',
     selection: '',
     odds: 2,
+    probability: 0,
     edgePercent: 5,
     sampleSize: 100,
     marketType: 'outcomes',

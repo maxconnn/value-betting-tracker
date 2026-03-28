@@ -23,18 +23,27 @@ import {
   getMarketSelectionControlValue,
   MANUAL_MARKET_SELECTION_VALUE,
 } from '../utils/marketOptions';
+import { parsePastedBetText } from '../utils/pastedBetParser';
 
-type BetFormNumericField = 'odds' | 'edgePercent' | 'sampleSize';
+type BetFormNumericField = 'odds' | 'probability' | 'edgePercent' | 'sampleSize';
 type BetFormState = Omit<BetDraft, BetFormNumericField> & {
   odds: string;
+  probability: string;
   edgePercent: string;
   sampleSize: string;
 };
+
+const parseNoticeStyles = {
+  success: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+  error: 'border-rose-300 bg-rose-50 text-rose-900',
+  info: 'border-sky-300 bg-sky-50 text-sky-900',
+} as const;
 
 function toFormState(draft: BetDraft): BetFormState {
   return {
     ...draft,
     odds: String(draft.odds),
+    probability: String(draft.probability),
     edgePercent: String(draft.edgePercent),
     sampleSize: String(draft.sampleSize),
   };
@@ -59,6 +68,7 @@ function toBetDraft(formState: BetFormState): BetDraft {
   return {
     ...formState,
     odds: parseDraftNumber(formState.odds, 0),
+    probability: parseDraftNumber(formState.probability, 0),
     edgePercent: parseDraftNumber(formState.edgePercent, 0),
     sampleSize: Math.max(0, Math.round(parseDraftNumber(formState.sampleSize, 0))),
   };
@@ -73,10 +83,14 @@ interface BetFormProps {
 
 function toDraft(row: RecalculatedBet): BetDraft {
   return {
+    bookmaker: row.bookmaker,
+    sport: row.sport,
     date: row.date,
+    time: row.time,
     event: row.event,
     selection: row.selection,
     odds: row.odds,
+    probability: row.probability,
     edgePercent: row.edgePercent,
     sampleSize: row.sampleSize,
     marketType: row.marketType,
@@ -115,23 +129,31 @@ export function BetForm({
 }: BetFormProps) {
   const [formState, setFormState] = useState<BetFormState>(createEmptyFormState);
   const [selectionControlValue, setSelectionControlValue] = useState('');
+  const [pastedText, setPastedText] = useState('');
+  const [parseNotice, setParseNotice] = useState<{
+    tone: keyof typeof parseNoticeStyles;
+    text: string;
+  } | null>(null);
   const normalizedDraft = toBetDraft(formState);
+
+  function applyDraftToForm(nextDraft: BetDraft) {
+    setFormState(toFormState(nextDraft));
+    setSelectionControlValue(
+      getMarketSelectionControlValue(nextDraft.marketType, nextDraft.selection),
+    );
+  }
 
   useEffect(() => {
     if (editingBet) {
-      const nextDraft = toDraft(editingBet);
-      setFormState(toFormState(nextDraft));
-      setSelectionControlValue(
-        getMarketSelectionControlValue(nextDraft.marketType, nextDraft.selection),
-      );
+      applyDraftToForm(toDraft(editingBet));
+      setPastedText('');
+      setParseNotice(null);
       return;
     }
 
-    const emptyDraft = createEmptyBetDraft();
-    setFormState(toFormState(emptyDraft));
-    setSelectionControlValue(
-      getMarketSelectionControlValue(emptyDraft.marketType, emptyDraft.selection),
-    );
+    applyDraftToForm(createEmptyBetDraft());
+    setPastedText('');
+    setParseNotice(null);
   }, [editingBet?.id]);
 
   const preview = calculateStakeAmount(bankrollAtBet, normalizedDraft);
@@ -155,6 +177,29 @@ export function BetForm({
 
   function updateNumericField(field: BetFormNumericField, value: string) {
     updateField(field, value);
+  }
+
+  function handleParsePastedText() {
+    const { draft, parsedFields } = parsePastedBetText(pastedText);
+
+    if (parsedFields.length === 0) {
+      setParseNotice({
+        tone: 'error',
+        text: 'Не удалось распознать данные ставки. Проверьте формат вставленного текста.',
+      });
+      return;
+    }
+
+    const nextDraft: BetDraft = {
+      ...normalizedDraft,
+      ...draft,
+    };
+
+    applyDraftToForm(nextDraft);
+    setParseNotice({
+      tone: 'success',
+      text: `Распознано ${parsedFields.length} полей. Проверьте форму и сохраните ставку обычным способом.`,
+    });
   }
 
   function handleMarketTypeChange(nextMarketType: BetDraft['marketType']) {
@@ -199,18 +244,19 @@ export function BetForm({
 
     onSubmit({
       ...normalizedDraft,
+      bookmaker: formState.bookmaker.trim(),
+      sport: formState.sport.trim(),
       date: normalizedDraft.date,
+      time: formState.time.trim(),
       event: formState.event.trim(),
       selection: formState.selection.trim(),
       leagueName: formState.leagueName.trim(),
     });
 
     if (!editingBet) {
-      const emptyFormState = createEmptyFormState();
-      setFormState(emptyFormState);
-      setSelectionControlValue(
-        getMarketSelectionControlValue(emptyFormState.marketType, emptyFormState.selection),
-      );
+      applyDraftToForm(createEmptyBetDraft());
+      setPastedText('');
+      setParseNotice(null);
     }
   }
 
@@ -243,6 +289,47 @@ export function BetForm({
       <form className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr] xl:gap-6" onSubmit={handleSubmit}>
         <div className="space-y-5">
           <div className="rounded-[26px] border border-stone-200 bg-stone-50/90 p-4 sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-950">Импорт из вставки</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Вставьте копируемый текст ставки, нажмите `Разобрать`, затем проверьте поля
+                  формы вручную. OCR не используется.
+                </p>
+              </div>
+
+              <button
+                className="toolbar-button sm:w-auto"
+                type="button"
+                disabled={pastedText.trim() === ''}
+                onClick={handleParsePastedText}
+              >
+                Разобрать
+              </button>
+            </div>
+
+            <label className="field">
+              <span className="field-label">Сырой текст ставки</span>
+              <textarea
+                className="field-input min-h-[180px] resize-y"
+                placeholder={
+                  'OlyBet (EU)\nФутбол\t29/03\n07:00\tКоманда 1 – Команда 2\nЛига\tТб(0.5) 2-я команда\n2.21\n47.9%\n+5.84%'
+                }
+                value={pastedText}
+                onChange={(event) => setPastedText(event.target.value)}
+              />
+            </label>
+
+            {parseNotice ? (
+              <div
+                className={`mt-4 rounded-[20px] border px-4 py-3 text-sm font-medium ${parseNoticeStyles[parseNotice.tone]}`}
+              >
+                {parseNotice.text}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-[26px] border border-stone-200 bg-stone-50/90 p-4 sm:p-5">
             <div className="mb-4">
               <h3 className="text-lg font-bold text-slate-950">Матч и контекст</h3>
               <p className="mt-1 text-sm text-slate-500">
@@ -252,6 +339,28 @@ export function BetForm({
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="field">
+                <span className="field-label">Букмекер</span>
+                <input
+                  className="field-input"
+                  type="text"
+                  placeholder="OlyBet (EU)"
+                  value={formState.bookmaker}
+                  onChange={(event) => updateField('bookmaker', event.target.value)}
+                />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Спорт</span>
+                <input
+                  className="field-input"
+                  type="text"
+                  placeholder="Футбол"
+                  value={formState.sport}
+                  onChange={(event) => updateField('sport', event.target.value)}
+                />
+              </label>
+
+              <label className="field">
                 <span className="field-label">Дата</span>
                 <input
                   className="field-input"
@@ -259,6 +368,16 @@ export function BetForm({
                   required
                   value={formState.date}
                   onChange={(event) => updateField('date', event.target.value)}
+                />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Время</span>
+                <input
+                  className="field-input"
+                  type="time"
+                  value={formState.time}
+                  onChange={(event) => updateField('time', event.target.value)}
                 />
               </label>
 
@@ -373,6 +492,19 @@ export function BetForm({
                   required
                   value={formState.odds}
                   onChange={(event) => updateNumericField('odds', event.target.value)}
+                />
+              </label>
+
+              <label className="field">
+                <span className="field-label">Вероятность (%)</span>
+                <input
+                  className="field-input"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={formState.probability}
+                  onChange={(event) => updateNumericField('probability', event.target.value)}
                 />
               </label>
 

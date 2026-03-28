@@ -84,11 +84,13 @@ export function AppShell({
           </button>
 
           <div className="desktop-sidebar-brand">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Operations
-            </p>
-            <h1 className="mt-3 text-xl font-semibold text-white">{appTitle}</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Operations
+              </p>
+              <h1 className="mt-3 text-xl font-semibold text-white">{appTitle}</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
+            </div>
           </div>
         </div>
 
@@ -183,12 +185,14 @@ export function AppShell({
           >
             <div className="mobile-drawer-header border-b border-slate-800 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                     Operations
                   </p>
                   <h1 className="mt-2 text-lg font-semibold text-white">{appTitle}</h1>
-                  <p className="mobile-drawer-subtitle mt-2 text-sm leading-6 text-slate-400">{appSubtitle}</p>
+                  <p className="mobile-drawer-subtitle mt-2 text-sm leading-6 text-slate-400">
+                    {appSubtitle}
+                  </p>
                 </div>
                 <button
                   className="shell-menu-button shell-menu-button-icon"

@@ -23,19 +23,24 @@ interface BetsTableProps {
   onDelete: (id: string) => void;
 }
 
-type QuickEditNumericField = 'odds' | 'edgePercent' | 'sampleSize';
+type QuickEditNumericField = 'odds' | 'probability' | 'edgePercent' | 'sampleSize';
 type QuickEditDraft = Omit<BetDraft, QuickEditNumericField> & {
   odds: string;
+  probability: string;
   edgePercent: string;
   sampleSize: string;
 };
 
 function toDraft(row: RecalculatedBet): BetDraft {
   return {
+    bookmaker: row.bookmaker,
+    sport: row.sport,
     date: row.date,
+    time: row.time,
     event: row.event,
     selection: row.selection,
     odds: row.odds,
+    probability: row.probability,
     edgePercent: row.edgePercent,
     sampleSize: row.sampleSize,
     marketType: row.marketType,
@@ -52,6 +57,7 @@ function toQuickEditDraft(row: RecalculatedBet): QuickEditDraft {
   return {
     ...toDraft(row),
     odds: String(row.odds),
+    probability: String(row.probability),
     edgePercent: String(row.edgePercent),
     sampleSize: String(row.sampleSize),
   };
@@ -72,6 +78,7 @@ function toBetDraft(quickEditDraft: QuickEditDraft): BetDraft {
   return {
     ...quickEditDraft,
     odds: parseQuickEditNumber(quickEditDraft.odds, 0),
+    probability: parseQuickEditNumber(quickEditDraft.probability, 0),
     edgePercent: parseQuickEditNumber(quickEditDraft.edgePercent, 0),
     sampleSize: Math.max(0, Math.round(parseQuickEditNumber(quickEditDraft.sampleSize, 0))),
   };
@@ -129,9 +136,12 @@ export function BetsTable({
 
     onQuickSave(quickEditId, {
       ...normalizedDraft,
+      bookmaker: quickEditDraft.bookmaker.trim(),
+      sport: quickEditDraft.sport.trim(),
       event: quickEditDraft.event.trim(),
       selection: quickEditDraft.selection.trim(),
       leagueName: quickEditDraft.leagueName.trim(),
+      time: quickEditDraft.time.trim(),
     });
     closeQuickEdit();
   }
@@ -205,14 +215,24 @@ export function BetsTable({
                   }`}
                 >
                   <td className="px-3 py-4 align-top font-semibold text-slate-700 md:px-4">{bet.index}</td>
-                  <td className="px-3 py-4 align-top whitespace-nowrap md:px-4">{formatDate(bet.date)}</td>
+                  <td className="px-3 py-4 align-top whitespace-nowrap md:px-4">
+                    <div className="space-y-1">
+                      <p>{formatDate(bet.date)}</p>
+                      {bet.time ? <p className="text-xs text-slate-500">{bet.time}</p> : null}
+                    </div>
+                  </td>
                   <td className="px-3 py-4 align-top md:px-4">
                     <div className="min-w-[210px] space-y-3 sm:min-w-[240px]">
                       <div>
                         <p className="font-semibold text-slate-950">{bet.event}</p>
                         <p className="text-xs text-slate-500">
-                          {bet.leagueName || 'Без названия лиги'} · {leagueTypeLabels[bet.leagueType]}
+                          {[bet.sport, bet.leagueName || 'Без названия лиги', leagueTypeLabels[bet.leagueType]]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </p>
+                        {bet.bookmaker ? (
+                          <p className="mt-1 text-xs font-medium text-slate-500">{bet.bookmaker}</p>
+                        ) : null}
                       </div>
 
                       <div className="flex flex-wrap gap-2">
@@ -275,7 +295,14 @@ export function BetsTable({
                     </div>
                   </td>
                   <td className="px-3 py-4 align-top font-medium md:px-4">{formatOdds(bet.odds)}</td>
-                  <td className="px-3 py-4 align-top font-medium md:px-4">{formatPercent(bet.edgePercent)}</td>
+                  <td className="px-3 py-4 align-top font-medium md:px-4">
+                    <div className="space-y-1">
+                      <p>{formatPercent(bet.edgePercent)}</p>
+                      {bet.probability > 0 ? (
+                        <p className="text-xs text-slate-500">P: {formatPercent(bet.probability)}</p>
+                      ) : null}
+                    </div>
+                  </td>
                   <td className="px-3 py-4 align-top font-medium md:px-4">{bet.sampleSize}</td>
                   <td className="px-3 py-4 align-top font-semibold md:px-4">{formatCurrency(bet.stakeAmount)}</td>
                   <td className="px-3 py-4 align-top md:px-4">
@@ -318,7 +345,49 @@ export function BetsTable({
                           </p>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                          <label className="field">
+                            <span className="field-label">Букмекер</span>
+                            <input
+                              className="field-input"
+                              type="text"
+                              value={quickEditDraft.bookmaker}
+                              onChange={(event) =>
+                                updateQuickField('bookmaker', event.target.value)
+                              }
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Спорт</span>
+                            <input
+                              className="field-input"
+                              type="text"
+                              value={quickEditDraft.sport}
+                              onChange={(event) => updateQuickField('sport', event.target.value)}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Дата</span>
+                            <input
+                              className="field-input"
+                              type="date"
+                              value={quickEditDraft.date}
+                              onChange={(event) => updateQuickField('date', event.target.value)}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Время</span>
+                            <input
+                              className="field-input"
+                              type="time"
+                              value={quickEditDraft.time}
+                              onChange={(event) => updateQuickField('time', event.target.value)}
+                            />
+                          </label>
+
                           <label className="field sm:col-span-2 lg:col-span-2">
                             <span className="field-label">Событие</span>
                             <input
@@ -329,7 +398,7 @@ export function BetsTable({
                             />
                           </label>
 
-                          <label className="field sm:col-span-2 lg:col-span-2">
+                          <label className="field sm:col-span-2 xl:col-span-2">
                             <span className="field-label">Ставка / рынок</span>
                             <input
                               className="field-input"
@@ -350,6 +419,21 @@ export function BetsTable({
                               step="0.01"
                               value={quickEditDraft.odds}
                               onChange={(event) => updateQuickField('odds', event.target.value)}
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span className="field-label">Вероятность</span>
+                            <input
+                              className="field-input"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={quickEditDraft.probability}
+                              onChange={(event) =>
+                                updateQuickField('probability', event.target.value)
+                              }
                             />
                           </label>
 

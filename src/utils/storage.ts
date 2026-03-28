@@ -117,6 +117,11 @@ function normalizeDate(value: unknown) {
   return /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : getTodayDateString();
 }
 
+function normalizeTime(value: unknown) {
+  const rawTime = normalizeString(value).trim();
+  return /^\d{2}:\d{2}$/.test(rawTime) ? rawTime : '';
+}
+
 function createUniqueId(rawId: unknown, index: number, usedIds: Set<string>) {
   const baseId = normalizeString(rawId, `restored-${index + 1}`).trim() || `restored-${index + 1}`;
 
@@ -152,10 +157,14 @@ function normalizeStoredBet(
 
   return {
     id: createUniqueId(value.id, index, usedIds),
+    bookmaker: normalizeString(value.bookmaker).trim(),
+    sport: normalizeString(value.sport).trim(),
     date: normalizeDate(value.date),
+    time: normalizeTime(value.time),
     event: normalizeString(value.event).trim(),
     selection: normalizeString(value.selection).trim(),
     odds: roundMoney(normalizeNumber(value.odds, 2, 1.01)),
+    probability: roundMoney(normalizeNumber(value.probability, 0, 0)),
     edgePercent: roundMoney(normalizeNumber(value.edgePercent, 0, 0)),
     sampleSize: Math.round(normalizeNumber(value.sampleSize, 0, 0)),
     marketType: normalizeMarketType(value.marketType, value.selection),
@@ -184,10 +193,14 @@ export function getDemoBets(): BetEntry[] {
   return [
     {
       id: 'demo-1',
+      bookmaker: '',
+      sport: '',
       date: '2026-03-18',
+      time: '',
       event: 'Arsenal - Chelsea',
       selection: 'П1',
       odds: 2.2,
+      probability: 0,
       edgePercent: 6.4,
       sampleSize: 140,
       marketType: 'outcomes',
@@ -200,10 +213,14 @@ export function getDemoBets(): BetEntry[] {
     },
     {
       id: 'demo-2',
+      bookmaker: '',
+      sport: '',
       date: '2026-03-19',
+      time: '',
       event: 'Atalanta - Torino',
       selection: 'ТБ 2.5',
       odds: 1.95,
+      probability: 0,
       edgePercent: 4.1,
       sampleSize: 88,
       marketType: 'totals',
@@ -216,10 +233,14 @@ export function getDemoBets(): BetEntry[] {
     },
     {
       id: 'demo-3',
+      bookmaker: '',
+      sport: '',
       date: '2026-03-20',
+      time: '',
       event: 'Vaxjo - Frolunda',
       selection: 'П2',
       odds: 3.4,
+      probability: 0,
       edgePercent: 8.8,
       sampleSize: 44,
       marketType: 'outcomes',
@@ -232,10 +253,14 @@ export function getDemoBets(): BetEntry[] {
     },
     {
       id: 'demo-4',
+      bookmaker: '',
+      sport: '',
       date: '2026-03-21',
+      time: '',
       event: 'Spokane - Everett',
       selection: 'ТМ 6.5',
       odds: 2.7,
+      probability: 0,
       edgePercent: 9.2,
       sampleSize: 76,
       marketType: 'totals',
@@ -248,10 +273,14 @@ export function getDemoBets(): BetEntry[] {
     },
     {
       id: 'demo-5',
+      bookmaker: '',
+      sport: '',
       date: '2026-03-22',
+      time: '',
       event: 'Junior Cup',
       selection: 'Угловые ТБ 10.5',
       odds: 7.4,
+      probability: 0,
       edgePercent: 12.5,
       sampleSize: 120,
       marketType: 'corners',

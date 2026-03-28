@@ -6,10 +6,14 @@ import { isSupabaseConfigured, supabase } from './supabase';
 type SupabaseBetRow = {
   id?: string | null;
   sort_order?: number | null;
+  bookmaker?: string | null;
+  sport?: string | null;
   date?: string | null;
+  time?: string | null;
   event?: string | null;
   market?: string | null;
   odds?: number | string | null;
+  probability?: number | string | null;
   value_percent?: number | string | null;
   sample_size?: number | string | null;
   market_type?: string | null;
@@ -27,10 +31,14 @@ type SupabaseBetRow = {
 type SupabaseBetWriteRow = {
   id: string;
   sort_order: number;
+  bookmaker: string;
+  sport: string;
   date: string;
+  time: string;
   event: string;
   market: string;
   odds: number;
+  probability: number;
   value_percent: number;
   sample_size: number;
   market_type: BetEntry['marketType'];
@@ -63,10 +71,14 @@ interface PersistedNotesPayload {
 const SUPABASE_SELECT_COLUMNS = [
   'id',
   'sort_order',
+  'bookmaker',
+  'sport',
   'date',
+  'time',
   'event',
   'market',
   'odds',
+  'probability',
   'value_percent',
   'sample_size',
   'market_type',
@@ -177,10 +189,14 @@ function mapSupabaseRowToBet(row: SupabaseBetRow) {
   const [normalizedBet] = normalizeStoredBets([
     {
       id: row.id ?? createUuid(),
+      bookmaker: row.bookmaker,
+      sport: row.sport,
       date: row.date,
+      time: row.time,
       event: row.event,
       selection: row.market,
       odds: row.odds,
+      probability: row.probability,
       edgePercent: row.value_percent,
       sampleSize: row.sample_size,
       marketType: row.market_type,
@@ -207,10 +223,14 @@ function mapRecalculatedBetToRow(bet: RecalculatedBet, index: number): SupabaseB
   return {
     id: bet.id,
     sort_order: index + 1,
+    bookmaker: bet.bookmaker,
+    sport: bet.sport,
     date: bet.date,
+    time: bet.time,
     event: bet.event,
     market: bet.selection,
     odds: bet.odds,
+    probability: bet.probability,
     value_percent: bet.edgePercent,
     sample_size: bet.sampleSize,
     market_type: bet.marketType,
