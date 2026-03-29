@@ -1,4 +1,4 @@
-import { checkFootballMatchStatus } from '../src/utils/matchCheck';
+import { checkMatchStatus } from '../src/utils/matchCheck';
 import type { MatchCheckRequest } from '../src/types/matchCheck';
 
 type ApiRequest = {
@@ -29,6 +29,10 @@ function parseRequestBody(body: unknown): MatchCheckRequest {
   return (body ?? {}) as MatchCheckRequest;
 }
 
+function debugLog(event: string, payload: unknown) {
+  console.debug(`[Sports match check][api] ${event}`, payload);
+}
+
 export default async function handler(request: ApiRequest, response: ApiResponse) {
   response.setHeader('Content-Type', 'application/json');
 
@@ -39,10 +43,19 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
   try {
     const body = parseRequestBody(request.body);
-    const result = await checkFootballMatchStatus(body, {
-      sportsApiKey: process.env.SPORTS_API_KEY,
-      sportsApiFootballBaseUrl: process.env.SPORTS_API_FOOTBALL_BASE_URL,
-    });
+    const result = await checkMatchStatus(
+      body,
+      {
+        sportsApiKey: process.env.SPORTS_API_KEY,
+        sportsApiFootballBaseUrl: process.env.SPORTS_API_FOOTBALL_BASE_URL,
+        sportsApiBasketballBaseUrl: process.env.SPORTS_API_BASKETBALL_BASE_URL,
+        sportsApiHockeyBaseUrl: process.env.SPORTS_API_HOCKEY_BASE_URL,
+      },
+      fetch,
+      {
+        debugLog,
+      },
+    );
 
     response.status(200).json(result);
   } catch (error) {

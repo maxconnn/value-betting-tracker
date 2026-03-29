@@ -36,236 +36,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-var FOOTBALL_SPORT_ALIASES = new Set(['football', 'soccer', 'футбол']);
-var NOT_STARTED_API_STATUSES = new Set(['NS', 'TBD', 'PST']);
-var LIVE_API_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT']);
-var FINISHED_API_STATUSES = new Set(['FT', 'AET', 'PEN']);
-var TEAM_STOPWORDS = new Set([
-    'fc',
-    'cf',
-    'sc',
-    'ac',
-    'as',
-    'afc',
-    'fk',
-    'nk',
-    'bk',
-    'if',
-    'ff',
-    'club',
-    'clube',
-    'football',
-    'futbol',
-    'futebol',
-]);
-var TEAM_TOKEN_ALIASES = {
-    st: 'saint',
-    utd: 'united',
-    untd: 'united',
-};
-function normalizeWhitespace(value) {
-    return value.replace(/\s+/g, ' ').trim();
-}
-function stripDiacritics(value) {
-    return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-}
-function normalizeComparableText(value) {
-    return normalizeWhitespace(stripDiacritics(value)
-        .toLowerCase()
-        .replace(/[’']/g, '')
-        .replace(/&/g, ' and ')
-        .replace(/[^a-z0-9\u0400-\u04ff\s-]/g, ' '));
-}
-function normalizeTimeValue(value) {
-    var normalized = value.trim();
-    return /^\d{2}:\d{2}$/.test(normalized) ? normalized : '';
-}
-function normalizeEventName(value) {
-    return normalizeWhitespace(value
-        .replace(/\s*[–—]\s*/g, ' - ')
-        .replace(/\s+-\s+/g, ' - '));
-}
-function splitEventTeams(value) {
-    var _a;
-    var normalized = normalizeEventName(value);
-    var strictParts = normalized
-        .split(' - ')
-        .map(function (part) { return normalizeWhitespace(part); })
-        .filter(Boolean);
-    if (strictParts.length === 2) {
-        return [strictParts[0], strictParts[1]];
-    }
-    var hyphenCount = ((_a = normalized.match(/-/g)) !== null && _a !== void 0 ? _a : []).length;
-    if (hyphenCount === 1) {
-        var looseParts = normalized
-            .split('-')
-            .map(function (part) { return normalizeWhitespace(part); })
-            .filter(Boolean);
-        if (looseParts.length === 2) {
-            return [looseParts[0], looseParts[1]];
-        }
-    }
-    return null;
-}
-function normalizeTeamToken(token) {
-    var _a;
-    return (_a = TEAM_TOKEN_ALIASES[token]) !== null && _a !== void 0 ? _a : token;
-}
-function getComparableTeamTokens(name) {
-    return normalizeComparableText(name)
-        .split(/[\s-]+/)
-        .map(normalizeTeamToken)
-        .filter(function (token) { return token && !TEAM_STOPWORDS.has(token); });
-}
-function compareTeamNames(left, right) {
-    var leftTokens = getComparableTeamTokens(left);
-    var rightTokens = getComparableTeamTokens(right);
-    if (leftTokens.length === 0 || rightTokens.length === 0) {
-        return false;
-    }
-    if (leftTokens.join(' ') === rightTokens.join(' ')) {
-        return true;
-    }
-    var shorter = leftTokens.length <= rightTokens.length ? leftTokens : rightTokens;
-    var longer = new Set(leftTokens.length <= rightTokens.length ? rightTokens : leftTokens);
-    var sharedCount = shorter.filter(function (token) { return longer.has(token); }).length;
-    if (shorter.length === 1) {
-        return sharedCount === 1 && shorter[0].length >= 4;
-    }
-    return sharedCount === shorter.length;
-}
-function getFixtureTeams(fixture) {
-    var _a, _b, _c, _d, _e, _f;
-    return {
-        home: normalizeWhitespace((_c = (_b = (_a = fixture.teams) === null || _a === void 0 ? void 0 : _a.home) === null || _b === void 0 ? void 0 : _b.name) !== null && _c !== void 0 ? _c : ''),
-        away: normalizeWhitespace((_f = (_e = (_d = fixture.teams) === null || _d === void 0 ? void 0 : _d.away) === null || _e === void 0 ? void 0 : _e.name) !== null && _f !== void 0 ? _f : ''),
-    };
-}
-function getFixtureEventLabel(fixture) {
-    var teams = getFixtureTeams(fixture);
-    return teams.home && teams.away ? normalizeEventName("".concat(teams.home, " - ").concat(teams.away)) : '';
-}
-function getFixtureTimeValue(fixture) {
-    var _a, _b;
-    var value = (_b = (_a = fixture.fixture) === null || _a === void 0 ? void 0 : _a.date) !== null && _b !== void 0 ? _b : '';
-    return value.length >= 16 ? value.slice(11, 16) : '';
-}
-function getFixtureMatchScore(request, fixture) {
-    var _a;
-    var teams = splitEventTeams(request.event);
-    var fixtureTeams = getFixtureTeams(fixture);
-    if (!teams || !fixtureTeams.home || !fixtureTeams.away) {
-        return -1;
-    }
-    var sameOrder = compareTeamNames(teams[0], fixtureTeams.home) && compareTeamNames(teams[1], fixtureTeams.away);
-    var reverseOrder = compareTeamNames(teams[0], fixtureTeams.away) && compareTeamNames(teams[1], fixtureTeams.home);
-    if (!sameOrder && !reverseOrder) {
-        return -1;
-    }
-    var score = sameOrder ? 100 : 96;
-    if (normalizeEventName(request.event) === getFixtureEventLabel(fixture)) {
-        score += 4;
-    }
-    var requestTime = normalizeTimeValue(request.time);
-    var fixtureTime = getFixtureTimeValue(fixture);
-    if (requestTime && fixtureTime && requestTime === fixtureTime) {
-        score += 2;
-    }
-    if ((_a = fixture.fixture) === null || _a === void 0 ? void 0 : _a.id) {
-        score += 1;
-    }
-    return score;
-}
-function findBestFixtureMatch(request, fixtures) {
-    var bestMatch = null;
-    var bestScore = -1;
-    fixtures.forEach(function (fixture) {
-        var score = getFixtureMatchScore(request, fixture);
-        if (score > bestScore) {
-            bestMatch = fixture;
-            bestScore = score;
-        }
-    });
-    return bestMatch;
-}
-function buildFootballFixturesUrl(baseUrl, date) {
-    var url = new URL(baseUrl);
-    var normalizedPath = url.pathname.replace(/\/$/, '');
-    url.pathname = normalizedPath.endsWith('/fixtures')
-        ? normalizedPath
-        : "".concat(normalizedPath, "/fixtures").replace(/\/{2,}/g, '/');
-    url.searchParams.set('date', date);
-    return url.toString();
-}
-function isFootballSport(value) {
-    return FOOTBALL_SPORT_ALIASES.has(normalizeComparableText(value));
-}
-function mapFootballApiStatus(shortStatus) {
-    var normalized = normalizeWhitespace(shortStatus !== null && shortStatus !== void 0 ? shortStatus : '').toUpperCase();
-    if (NOT_STARTED_API_STATUSES.has(normalized)) {
-        return 'not_started';
-    }
-    if (LIVE_API_STATUSES.has(normalized)) {
-        return 'live';
-    }
-    if (FINISHED_API_STATUSES.has(normalized)) {
-        return 'finished';
-    }
-    return 'not_found';
-}
-function checkFootballMatchStatus(request_1, env_1) {
-    return __awaiter(this, arguments, void 0, function (request, env, fetchImpl) {
-        var normalizedRequest, response, payload, fixtures, matchedFixture, matchedEvent, apiStatus;
-        var _a, _b, _c, _d, _e;
-        if (fetchImpl === void 0) { fetchImpl = fetch; }
-        return __generator(this, function (_f) {
-            switch (_f.label) {
-                case 0:
-                    normalizedRequest = {
-                        sport: typeof (request === null || request === void 0 ? void 0 : request.sport) === 'string' ? request.sport.trim() : '',
-                        date: typeof (request === null || request === void 0 ? void 0 : request.date) === 'string' ? request.date.trim() : '',
-                        time: typeof (request === null || request === void 0 ? void 0 : request.time) === 'string' ? normalizeTimeValue(request.time) : '',
-                        event: typeof (request === null || request === void 0 ? void 0 : request.event) === 'string' ? normalizeEventName(request.event) : '',
-                    };
-                    if (!isFootballSport(normalizedRequest.sport) ||
-                        normalizedRequest.date === '' ||
-                        normalizedRequest.event === '') {
-                        return [2 /*return*/, { status: 'not_found' }];
-                    }
-                    if (!env.sportsApiKey || !env.sportsApiFootballBaseUrl) {
-                        throw new Error('SPORTS_API_KEY или SPORTS_API_FOOTBALL_BASE_URL не заданы на сервере.');
-                    }
-                    return [4 /*yield*/, fetchImpl(buildFootballFixturesUrl(env.sportsApiFootballBaseUrl, normalizedRequest.date), {
-                            headers: {
-                                Accept: 'application/json',
-                                'x-apisports-key': env.sportsApiKey,
-                            },
-                        })];
-                case 1:
-                    response = _f.sent();
-                    if (!response.ok) {
-                        throw new Error("API-Sports \u0432\u0435\u0440\u043D\u0443\u043B \u043E\u0448\u0438\u0431\u043A\u0443 ".concat(response.status, "."));
-                    }
-                    return [4 /*yield*/, response.json()];
-                case 2:
-                    payload = (_f.sent());
-                    fixtures = Array.isArray(payload.response) ? payload.response : [];
-                    matchedFixture = findBestFixtureMatch(normalizedRequest, fixtures);
-                    if (!matchedFixture) {
-                        return [2 /*return*/, { status: 'not_found' }];
-                    }
-                    matchedEvent = getFixtureEventLabel(matchedFixture);
-                    apiStatus = normalizeWhitespace((_c = (_b = (_a = matchedFixture.fixture) === null || _a === void 0 ? void 0 : _a.status) === null || _b === void 0 ? void 0 : _b.short) !== null && _c !== void 0 ? _c : '').toUpperCase();
-                    return [2 /*return*/, {
-                            status: mapFootballApiStatus(apiStatus),
-                            fixtureId: (_e = (_d = matchedFixture.fixture) === null || _d === void 0 ? void 0 : _d.id) !== null && _e !== void 0 ? _e : undefined,
-                            apiStatus: apiStatus || undefined,
-                            matchedEvent: matchedEvent || undefined,
-                        }];
-            }
-        });
-    });
-}
+import { checkMatchStatus } from './src/utils/matchCheck';
 function getErrorMessage(error) {
     if (error instanceof Error && error.message.trim()) {
         return error.message.trim();
@@ -300,6 +71,9 @@ function readJsonBody(request) {
         });
     });
 }
+function debugLog(event, payload) {
+    console.debug("[Sports match check][vite] ".concat(event), payload);
+}
 function footballMatchRoutePlugin(mode) {
     var env = loadEnv(mode, process.cwd(), '');
     return {
@@ -321,9 +95,13 @@ function footballMatchRoutePlugin(mode) {
                             return [4 /*yield*/, readJsonBody(request)];
                         case 2:
                             body = _a.sent();
-                            return [4 /*yield*/, checkFootballMatchStatus(body, {
+                            return [4 /*yield*/, checkMatchStatus(body, {
                                     sportsApiKey: env.SPORTS_API_KEY,
                                     sportsApiFootballBaseUrl: env.SPORTS_API_FOOTBALL_BASE_URL,
+                                    sportsApiBasketballBaseUrl: env.SPORTS_API_BASKETBALL_BASE_URL,
+                                    sportsApiHockeyBaseUrl: env.SPORTS_API_HOCKEY_BASE_URL,
+                                }, fetch, {
+                                    debugLog: debugLog,
                                 })];
                         case 3:
                             result = _a.sent();

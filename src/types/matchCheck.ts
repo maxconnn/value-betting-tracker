@@ -1,4 +1,10 @@
-export const MATCH_CHECK_STATUSES = ['not_started', 'live', 'finished', 'not_found'] as const;
+export const MATCH_CHECK_STATUSES = [
+  'not_started',
+  'live',
+  'finished',
+  'not_found',
+  'plan_limited',
+] as const;
 export const MATCH_CHECK_DISPLAY_STATUSES = [...MATCH_CHECK_STATUSES, 'checking'] as const;
 
 export type MatchCheckStatus = (typeof MATCH_CHECK_STATUSES)[number];
@@ -9,6 +15,7 @@ export interface MatchCheckRequest {
   date: string;
   time: string;
   event: string;
+  leagueName?: string;
 }
 
 export interface MatchCheckResponse {
@@ -16,6 +23,8 @@ export interface MatchCheckResponse {
   fixtureId?: number;
   apiStatus?: string;
   matchedEvent?: string;
+  firstTeamScore?: number;
+  secondTeamScore?: number;
 }
 
 export interface BetMatchCheckState {

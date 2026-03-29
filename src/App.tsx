@@ -18,7 +18,12 @@ import { buildBettingAnalytics } from './utils/analytics';
 import { getBetStatsSummary, recalculateBankroll } from './utils/betting';
 import { downloadCsvFile, exportBetsToCsv, importBetsFromCsv } from './utils/csv';
 import { formatCurrency } from './utils/format';
-import { getMatchCheckRequestKey, isFootballSport } from './utils/matchCheck';
+import {
+  MATCH_CHECK_REQUEST_TIMEOUT_MS,
+  getMatchCheckRequestKey,
+  getSupportedMarketSettlementResult,
+  isSupportedMatchCheckSport,
+} from './utils/matchCheck';
 import {
   DEFAULT_INITIAL_BANK,
   STORAGE_KEYS,
@@ -77,6 +82,10 @@ function hasEqualMatchCheckStateMap(
       leftValue.requestKey === rightValue.requestKey
     );
   });
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 export default function App() {
@@ -151,9 +160,11 @@ export default function App() {
       return true;
     });
   }, [filters, recalculatedBets]);
-  const checkableFootballBets = useMemo(
+  const checkableMatchBets = useMemo(
     () =>
-      recalculatedBets.filter((bet) => bet.result === 'not_played' && isFootballSport(bet.sport)),
+      recalculatedBets.filter(
+        (bet) => bet.result === 'not_played' && isSupportedMatchCheckSport(bet.sport),
+      ),
     [recalculatedBets],
   );
 
@@ -330,7 +341,7 @@ export default function App() {
       const next: Record<string, BetMatchCheckState> = {};
 
       bets.forEach((bet) => {
-        if (bet.result !== 'not_played' || !isFootballSport(bet.sport)) {
+        if (bet.result !== 'not_played' || !isSupportedMatchCheckSport(bet.sport)) {
           return;
         }
 
@@ -529,7 +540,7 @@ export default function App() {
   }
 
   async function handleCheckMatches() {
-    if (isCheckingMatches || checkableFootballBets.length === 0) {
+    if (isCheckingMatches || checkableMatchBets.length === 0) {
       return;
     }
 
@@ -541,7 +552,7 @@ export default function App() {
       }
     >();
 
-    checkableFootballBets.forEach((bet) => {
+    checkableMatchBets.forEach((bet) => {
       const requestKey = getMatchCheckRequestKey(bet);
       const existingGroup = groupedRequests.get(requestKey);
 
@@ -557,12 +568,15 @@ export default function App() {
           date: bet.date,
           time: bet.time,
           event: bet.event,
+          leagueName: bet.leagueName,
         },
       });
     });
 
     const previousStates = new Map<string, BetMatchCheckState | undefined>();
-    checkableFootballBets.forEach((bet) => {
+    const betSnapshotById = new Map(checkableMatchBets.map((bet) => [bet.id, bet]));
+    const autoSettlements = new Map<string, BetEntry['result']>();
+    checkableMatchBets.forEach((bet) => {
       previousStates.set(bet.id, matchChecksByBetId[bet.id]);
     });
 
@@ -570,7 +584,7 @@ export default function App() {
     setMatchChecksByBetId((current) => {
       const next = { ...current };
 
-      checkableFootballBets.forEach((bet) => {
+      checkableMatchBets.forEach((bet) => {
         next[bet.id] = {
           status: 'checking',
           requestKey: getMatchCheckRequestKey(bet),
@@ -587,12 +601,17 @@ export default function App() {
     try {
       for (const [requestKey, requestGroup] of groupedRequests.entries()) {
         try {
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(() => controller.abort(), MATCH_CHECK_REQUEST_TIMEOUT_MS);
           const response = await fetch('/api/check-football-match', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestGroup.request),
+            signal: controller.signal,
+          }).finally(() => {
+            window.clearTimeout(timeoutId);
           });
 
           if (!response.ok) {
@@ -618,14 +637,36 @@ export default function App() {
             return next;
           });
 
+          requestGroup.betIds.forEach((betId) => {
+            const betSnapshot = betSnapshotById.get(betId);
+
+            if (!betSnapshot) {
+              return;
+            }
+
+            const autoSettledResult = getSupportedMarketSettlementResult(
+              betSnapshot.marketType,
+              betSnapshot.selection,
+              payload,
+            );
+
+            if (!autoSettledResult) {
+              return;
+            }
+
+            autoSettlements.set(betId, autoSettledResult);
+          });
+
           successfulChecks += 1;
         } catch (error) {
           failedChecks += 1;
           firstErrorMessage =
             firstErrorMessage ||
-            (error instanceof Error && error.message.trim()
-              ? error.message.trim()
-              : 'Неизвестная ошибка проверки матчей.');
+            (isAbortError(error)
+              ? 'Таймаут проверки матча.'
+              : error instanceof Error && error.message.trim()
+                ? error.message.trim()
+                : 'Неизвестная ошибка проверки матчей.');
 
           setMatchChecksByBetId((current) => {
             const next = { ...current };
@@ -633,12 +674,15 @@ export default function App() {
             requestGroup.betIds.forEach((betId) => {
               const previousState = previousStates.get(betId);
 
-              if (previousState) {
+              if (previousState && previousState.status !== 'checking') {
                 next[betId] = previousState;
                 return;
               }
 
-              delete next[betId];
+              next[betId] = {
+                status: 'not_found',
+                requestKey,
+              };
             });
 
             return next;
@@ -649,10 +693,30 @@ export default function App() {
       setIsCheckingMatches(false);
     }
 
+    if (autoSettlements.size > 0) {
+      setBets((current) =>
+        current.map((bet) => {
+          const autoSettledResult = autoSettlements.get(bet.id);
+
+          if (!autoSettledResult || bet.result !== 'not_played') {
+            return bet;
+          }
+
+          return {
+            ...bet,
+            result: autoSettledResult,
+          };
+        }),
+      );
+    }
+
     if (failedChecks === 0) {
       setNotice({
         tone: 'info',
-        text: `Проверено ${successfulChecks} футбольных матчей по открытым строкам журнала.`,
+        text:
+          autoSettlements.size > 0
+            ? `Проверено ${successfulChecks} матчей. Для ${autoSettlements.size} ставок результат определён автоматически.`
+            : `Проверено ${successfulChecks} матчей по открытым строкам журнала.`,
       });
       return;
     }
@@ -660,7 +724,10 @@ export default function App() {
     if (successfulChecks > 0) {
       setNotice({
         tone: 'error',
-        text: `Часть матчей проверена, но ${failedChecks} запросов завершились ошибкой: ${firstErrorMessage}`,
+        text:
+          autoSettlements.size > 0
+            ? `Часть матчей проверена, ${autoSettlements.size} ставок обновлены автоматически, но ${failedChecks} запросов завершились ошибкой: ${firstErrorMessage}`
+            : `Часть матчей проверена, но ${failedChecks} запросов завершились ошибкой: ${firstErrorMessage}`,
       });
       return;
     }
@@ -766,7 +833,7 @@ export default function App() {
               totalRows={recalculatedBets.length}
               hasActiveFilters={hasActiveFilters}
               editingBetId={editingBetId}
-              checkableMatchesCount={checkableFootballBets.length}
+              checkableMatchesCount={checkableMatchBets.length}
               isCheckingMatches={isCheckingMatches}
               matchChecksByBetId={matchChecksByBetId}
               onEdit={(id) => setEditingBetId(id)}
