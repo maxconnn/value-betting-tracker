@@ -17,6 +17,7 @@ import {
   matchCheckStatusBadgeStyles,
   matchCheckStatusLabels,
 } from '../utils/matchCheck';
+import { normalizeDecimalInput } from '../utils/decimalInput';
 
 interface BetsTableProps {
   bets: RecalculatedBet[];
@@ -130,6 +131,24 @@ export function BetsTable({
   }
 
   function updateQuickField<K extends keyof QuickEditDraft>(field: K, value: QuickEditDraft[K]) {
+    if (field === 'edgePercent' && typeof value === 'string') {
+      const normalizedValue = normalizeDecimalInput(value);
+
+      if (normalizedValue === null) {
+        return;
+      }
+
+      setQuickEditDraft((current) =>
+        current
+          ? {
+              ...current,
+              edgePercent: normalizedValue,
+            }
+          : current,
+      );
+      return;
+    }
+
     setQuickEditDraft((current) =>
       current
         ? {
@@ -479,9 +498,10 @@ export function BetsTable({
                             <span className="field-label">Перевес</span>
                             <input
                               className="field-input"
-                              type="number"
-                              min="0"
-                              step="0.1"
+                              type="text"
+                              inputMode="decimal"
+                              step="0.01"
+                              autoComplete="off"
                               value={quickEditDraft.edgePercent}
                               onChange={(event) =>
                                 updateQuickField('edgePercent', event.target.value)

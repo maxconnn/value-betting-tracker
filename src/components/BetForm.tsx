@@ -23,6 +23,7 @@ import {
   getMarketSelectionControlValue,
   MANUAL_MARKET_SELECTION_VALUE,
 } from '../utils/marketOptions';
+import { normalizeDecimalInput } from '../utils/decimalInput';
 import { parsePastedBetText } from '../utils/pastedBetParser';
 
 type BetFormNumericField = 'odds' | 'probability' | 'edgePercent' | 'sampleSize';
@@ -176,6 +177,17 @@ export function BetForm({
   }
 
   function updateNumericField(field: BetFormNumericField, value: string) {
+    if (field === 'edgePercent') {
+      const normalizedValue = normalizeDecimalInput(value);
+
+      if (normalizedValue === null) {
+        return;
+      }
+
+      updateField(field, normalizedValue);
+      return;
+    }
+
     updateField(field, value);
   }
 
@@ -512,9 +524,10 @@ export function BetForm({
                 <span className="field-label">Перевес (%)</span>
                 <input
                   className="field-input"
-                  type="number"
-                  min="0"
-                  step="0.1"
+                  type="text"
+                  inputMode="decimal"
+                  step="0.01"
+                  autoComplete="off"
                   required
                   value={formState.edgePercent}
                   onChange={(event) => updateNumericField('edgePercent', event.target.value)}

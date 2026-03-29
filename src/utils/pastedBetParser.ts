@@ -5,8 +5,34 @@ export interface ParsedBetDraftResult {
   parsedFields: Array<keyof BetDraft>;
 }
 
+export type PasteFormat = 'desktop' | 'mobile' | 'unknown';
+
+function buildParsedResult(
+  draft: Partial<BetDraft>,
+  parsedFields: Array<keyof BetDraft>,
+): ParsedBetDraftResult {
+  return {
+    draft,
+    parsedFields: [...new Set(parsedFields)],
+  };
+}
+
 function normalizeLine(line: string) {
-  return line.replace(/\u00A0/g, ' ').trim();
+  return line
+    .replace(/\u00A0/g, ' ')
+    .replace(/[—−]/g, '–')
+    .replace(/\s-\s/g, ' – ')
+    .replace(/\s*\t\s*/g, '\t')
+    .replace(/[^\S\t]+/g, ' ')
+    .trim();
+}
+
+function normalizeLines(rawText: string) {
+  return rawText
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map(normalizeLine)
+    .filter(Boolean);
 }
 
 function normalizeSegment(segment: string) {
@@ -29,6 +55,14 @@ function splitLine(line: string) {
     .split(/\s{2,}/)
     .map(normalizeSegment)
     .filter(Boolean);
+}
+
+function isDateToken(value: string) {
+  return /^\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?$/.test(value.trim());
+}
+
+function isTimeToken(value: string) {
+  return /^([01]?\d|2[0-3]):[0-5]\d$/.test(value.trim());
 }
 
 function parseSportDateLine(line: string) {
@@ -71,12 +105,43 @@ function parseTimeEventLine(line: string) {
   };
 }
 
-function isDateToken(value: string) {
-  return /^\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?$/.test(value.trim());
+function parseDateTimeLine(line: string) {
+  const match = normalizeLine(line).match(
+    /^(\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?)\s+(([01]?\d|2[0-3]):[0-5]\d)$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    dateToken: match[1],
+    time: match[2],
+  };
 }
 
-function isTimeToken(value: string) {
-  return /^([01]?\d|2[0-3]):[0-5]\d$/.test(value.trim());
+function parseLeagueMarketLine(line: string) {
+  const segments = splitLine(line);
+  if (segments.length >= 2) {
+    return {
+      leagueName: segments[0],
+      selection: segments.slice(1).join(' '),
+    };
+  }
+
+  const normalized = normalizeLine(line);
+  const marketMatch = normalized.match(
+    /^(.*\S)\s+(ТБ|ТМ|Тб|Тм|Ф1|Ф2|ИТБ|ИТМ|ИФ1|ИФ2|Угловые|Углов|Corners?|Over|Under)(.*)$/i,
+  );
+
+  if (!marketMatch) {
+    return null;
+  }
+
+  return {
+    leagueName: normalizeSegment(marketMatch[1]),
+    selection: normalizeSegment(`${marketMatch[2]}${marketMatch[3]}`),
+  };
 }
 
 function formatIsoDate(year: number, month: number, day: number) {
@@ -150,6 +215,29 @@ function parseDecimalValue(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function appendField<K extends keyof BetDraft>(
+  draft: Partial<BetDraft>,
+  parsedFields: Array<keyof BetDraft>,
+  field: K,
+  value: BetDraft[K] | undefined | null,
+) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    draft[field] = trimmed as BetDraft[K];
+    parsedFields.push(field);
+    return;
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    draft[field] = value as BetDraft[K];
+    parsedFields.push(field);
+  }
+}
+
 function inferMarketType(selection: string): MarketType | null {
   const normalizedSelection = selection.trim().toLowerCase();
 
@@ -185,25 +273,50 @@ function inferMarketType(selection: string): MarketType | null {
     return 'totals';
   }
 
-  if (/^(п1|п2|х|1х|12|х2)$/.test(normalizedSelection)) {
+  if (/^(п?1|п?2|х|x|1[хx]|[хx]2|12|1|2)$/.test(normalizedSelection)) {
     return 'outcomes';
   }
 
   return null;
 }
 
-export function parsePastedBetText(rawText: string): ParsedBetDraftResult {
-  const lines = rawText
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map(normalizeLine)
-    .filter(Boolean);
+function parsePercentLines(
+  numericLines: string[],
+  draft: Partial<BetDraft>,
+  parsedFields: Array<keyof BetDraft>,
+) {
+  const percentLines = numericLines
+    .map((line) => ({
+      raw: line,
+      value: parsePercentValue(line),
+    }))
+    .filter((item): item is { raw: string; value: number } => item.value !== null);
 
+  const signedPercent = percentLines.find((item) => /^[+-]/.test(item.raw.trim()));
+  if (signedPercent) {
+    appendField(draft, parsedFields, 'edgePercent', Math.abs(signedPercent.value));
+  }
+
+  const probabilityCandidate = percentLines.find((item) => item.raw !== signedPercent?.raw);
+  if (probabilityCandidate) {
+    appendField(draft, parsedFields, 'probability', Math.abs(probabilityCandidate.value));
+  }
+
+  if (draft.edgePercent === undefined && percentLines.length >= 2) {
+    appendField(draft, parsedFields, 'edgePercent', Math.abs(percentLines[1].value));
+  }
+
+  if (draft.probability === undefined && !signedPercent && percentLines.length >= 1) {
+    appendField(draft, parsedFields, 'probability', Math.abs(percentLines[0].value));
+  }
+}
+
+function parseDesktopLines(lines: string[]): ParsedBetDraftResult {
   const draft: Partial<BetDraft> = {};
   const parsedFields: Array<keyof BetDraft> = [];
 
   if (lines.length === 0) {
-    return { draft, parsedFields };
+    return buildParsedResult(draft, parsedFields);
   }
 
   let cursor = 0;
@@ -214,105 +327,154 @@ export function parsePastedBetText(rawText: string): ParsedBetDraftResult {
     bookmakerLine &&
     !isDateToken(bookmakerLine) &&
     !isTimeToken(bookmakerLine) &&
+    !parseDateTimeLine(bookmakerLine) &&
     !firstLineLooksLikeSportDate
   ) {
-    draft.bookmaker = bookmakerLine;
-    parsedFields.push('bookmaker');
+    appendField(draft, parsedFields, 'bookmaker', bookmakerLine);
     cursor += 1;
   }
 
   const sportDateLine = parseSportDateLine(lines[cursor] ?? '');
   if (sportDateLine) {
-    const sport = sportDateLine.sport;
-    const date = parseDateToken(sportDateLine.dateToken);
-
-    if (sport) {
-      draft.sport = sport;
-      parsedFields.push('sport');
-    }
-
-    if (date) {
-      draft.date = date;
-      parsedFields.push('date');
-    }
-
+    appendField(draft, parsedFields, 'sport', sportDateLine.sport);
+    appendField(draft, parsedFields, 'date', parseDateToken(sportDateLine.dateToken));
     cursor += 1;
   }
 
   const timeEventLine = parseTimeEventLine(lines[cursor] ?? '');
   if (timeEventLine) {
-    draft.time = timeEventLine.time;
-    parsedFields.push('time');
-
-    draft.event = timeEventLine.event;
-    parsedFields.push('event');
-
+    appendField(draft, parsedFields, 'time', timeEventLine.time);
+    appendField(draft, parsedFields, 'event', timeEventLine.event);
     cursor += 1;
   }
 
-  const leagueMarketSegments = splitLine(lines[cursor] ?? '');
-  if (leagueMarketSegments.length >= 2) {
-    const leagueName = leagueMarketSegments[0];
-    const selection = leagueMarketSegments.slice(1).join(' ');
+  const leagueMarketLine = parseLeagueMarketLine(lines[cursor] ?? '');
+  if (leagueMarketLine) {
+    appendField(draft, parsedFields, 'leagueName', leagueMarketLine.leagueName);
+    appendField(draft, parsedFields, 'selection', leagueMarketLine.selection);
 
-    if (leagueName) {
-      draft.leagueName = leagueName;
-      parsedFields.push('leagueName');
-    }
-
-    if (selection) {
-      draft.selection = selection;
-      parsedFields.push('selection');
-
-      const marketType = inferMarketType(selection);
-      if (marketType) {
-        draft.marketType = marketType;
-        parsedFields.push('marketType');
-      }
+    const marketType = inferMarketType(leagueMarketLine.selection);
+    if (marketType) {
+      appendField(draft, parsedFields, 'marketType', marketType);
     }
 
     cursor += 1;
   }
 
   const numericLines = lines.slice(cursor);
-  const oddsLine = numericLines.find((line) => !line.includes('%'));
+  const oddsLine = numericLines.find((line) => parseDecimalValue(line) !== null);
   const odds = oddsLine ? parseDecimalValue(oddsLine) : null;
   if (odds !== null) {
-    draft.odds = odds;
-    parsedFields.push('odds');
+    appendField(draft, parsedFields, 'odds', odds);
   }
 
-  const percentLines = numericLines
-    .map((line) => ({
-      raw: line,
-      value: parsePercentValue(line),
-    }))
-    .filter((item): item is { raw: string; value: number } => item.value !== null);
+  parsePercentLines(numericLines, draft, parsedFields);
+  return buildParsedResult(draft, parsedFields);
+}
 
-  const signedPercent = percentLines.find((item) => /^[+-]/.test(item.raw.trim()));
-  if (signedPercent) {
-    draft.edgePercent = Math.abs(signedPercent.value);
-    parsedFields.push('edgePercent');
+function parseMobileLines(lines: string[]): ParsedBetDraftResult {
+  const draft: Partial<BetDraft> = {};
+  const parsedFields: Array<keyof BetDraft> = [];
+
+  if (lines.length === 0) {
+    return buildParsedResult(draft, parsedFields);
   }
 
-  const probabilityCandidate = percentLines.find((item) => item.raw !== signedPercent?.raw);
-  if (probabilityCandidate) {
-    draft.probability = Math.abs(probabilityCandidate.value);
-    parsedFields.push('probability');
+  const probability = parsePercentValue(lines[0] ?? '');
+  if (probability !== null && !/^[+-]/.test((lines[0] ?? '').trim())) {
+    appendField(draft, parsedFields, 'probability', Math.abs(probability));
   }
 
-  if (draft.edgePercent === undefined && percentLines.length >= 2) {
-    draft.edgePercent = Math.abs(percentLines[1].value);
-    parsedFields.push('edgePercent');
+  const edgePercent = parsePercentValue(lines[1] ?? '');
+  if (edgePercent !== null && /^[+-]/.test((lines[1] ?? '').trim())) {
+    appendField(draft, parsedFields, 'edgePercent', Math.abs(edgePercent));
   }
 
-  if (draft.probability === undefined && !signedPercent && percentLines.length >= 1) {
-    draft.probability = Math.abs(percentLines[0].value);
-    parsedFields.push('probability');
+  const dateTimeLine = parseDateTimeLine(lines[2] ?? '');
+  if (dateTimeLine) {
+    appendField(draft, parsedFields, 'date', parseDateToken(dateTimeLine.dateToken));
+    appendField(draft, parsedFields, 'time', dateTimeLine.time);
   }
 
-  return {
-    draft,
-    parsedFields: [...new Set(parsedFields)],
-  };
+  appendField(draft, parsedFields, 'sport', lines[3] ?? '');
+  appendField(draft, parsedFields, 'bookmaker', lines[4] ?? '');
+
+  const oddsLine = lines[lines.length - 1] ?? '';
+  const odds = parseDecimalValue(oddsLine);
+  if (odds !== null) {
+    appendField(draft, parsedFields, 'odds', odds);
+  }
+
+  const bodyLines = lines.slice(5, odds !== null ? -1 : lines.length);
+  appendField(draft, parsedFields, 'event', bodyLines[0] ?? '');
+  appendField(draft, parsedFields, 'leagueName', bodyLines[1] ?? '');
+  appendField(draft, parsedFields, 'selection', bodyLines[2] ?? '');
+
+  if (draft.selection) {
+    const marketType = inferMarketType(draft.selection);
+    if (marketType) {
+      appendField(draft, parsedFields, 'marketType', marketType);
+    }
+  }
+
+  return buildParsedResult(draft, parsedFields);
+}
+
+function detectPasteFormatFromLines(lines: string[]): PasteFormat {
+  if (lines.length === 0) {
+    return 'unknown';
+  }
+
+  const firstPercent = parsePercentValue(lines[0] ?? '');
+  const secondPercent = parsePercentValue(lines[1] ?? '');
+  const thirdLineDateTime = parseDateTimeLine(lines[2] ?? '');
+  const trailingOdds = parseDecimalValue(lines[lines.length - 1] ?? '');
+
+  if (
+    firstPercent !== null &&
+    secondPercent !== null &&
+    !/^[+-]/.test((lines[0] ?? '').trim()) &&
+    /^[+-]/.test((lines[1] ?? '').trim()) &&
+    thirdLineDateTime &&
+    trailingOdds !== null
+  ) {
+    return 'mobile';
+  }
+
+  const startsWithBookmaker =
+    Boolean(lines[0]) &&
+    Boolean(parseSportDateLine(lines[1] ?? '')) &&
+    Boolean(parseTimeEventLine(lines[2] ?? ''));
+  const startsWithSportDate =
+    Boolean(parseSportDateLine(lines[0] ?? '')) &&
+    Boolean(parseTimeEventLine(lines[1] ?? ''));
+
+  if (startsWithBookmaker || startsWithSportDate) {
+    return 'desktop';
+  }
+
+  return 'unknown';
+}
+
+export function detectPasteFormat(rawText: string): PasteFormat {
+  return detectPasteFormatFromLines(normalizeLines(rawText));
+}
+
+export function parseDesktopBetText(rawText: string): ParsedBetDraftResult {
+  return parseDesktopLines(normalizeLines(rawText));
+}
+
+export function parseMobileBetText(rawText: string): ParsedBetDraftResult {
+  return parseMobileLines(normalizeLines(rawText));
+}
+
+export function parsePastedBetText(rawText: string): ParsedBetDraftResult {
+  const normalizedLines = normalizeLines(rawText);
+  const format = detectPasteFormatFromLines(normalizedLines);
+
+  if (format === 'mobile') {
+    return parseMobileLines(normalizedLines);
+  }
+
+  return parseDesktopLines(normalizedLines);
 }
